@@ -47,15 +47,15 @@ def main():
 
     check_numeric(5, n_size, "N");
 
-    # # Create a UDP socket
-    # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # Create a UDP socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	
-    # # Bind the socket to the port
-    # # 'localhosts' should be changed before testing on network
-    # local_address = ('localhost', l_port)    
-    # poc_address = ('localhost', poc_port)
-    # print('starting up on {} port {}'.format(*local_address))
-    # sock.bind(local_address)
+    # Bind the socket to the port
+    # 'localhosts' should be changed before testing on network
+    local_address = ('localhost', l_port)    
+    poc_address = ('localhost', poc_port)
+    print('starting up on {} port {}'.format(*local_address))
+    sock.bind(local_address)
 
 
 
