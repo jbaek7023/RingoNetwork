@@ -19,14 +19,10 @@ def main():
     if (sys.argv[1]=="S"):
     	role = "S"
 
-
-
-
-
 	print "Made it so far!"
-	
 
-# # Create a UDP socket
+
+# Create a UDP socket
 # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # # Bind the socket to the port
