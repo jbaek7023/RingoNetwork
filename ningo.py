@@ -113,8 +113,31 @@ def send_rtt(server, peers, poc_name, poc_port):
     server.socket.sendto(
         peer_data.encode('utf-8'),
         poc_address)
-    server.serve_forever()
 
+# Receive the response from PoC
+def rec_rtt(server, peers, poc_name, poc_port):
+    print('receiving?')
+    data, addr = server.socket.recvfrom(1024)
+    peers[str(addr)] = 1 # add sender address to its peers
+    print('received?')
+
+    data = data.decode('utf-8')
+    json_obj = json.loads(data)
+    keyword = json_obj['command']
+    peers_response = json_obj['peers']
+    if keyword == "peer_discovery":
+        # we REPLY the peers
+        for key in peers_response:
+            peers[key] = 1
+        print(peers)
+        new_peer_data = json.dumps({
+            'command': 'peer_discovery',
+            'peers': peers})
+        server.socket.sendto(
+            new_peer_data.encode('utf-8'),
+            addr)
+    print(peers)
+    server.serve_forever()
 
 def main():
     if (len(sys.argv) != 6):
@@ -149,9 +172,13 @@ def main():
     server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
 
     # Send to PoC
-    if poc_name != "0":
-        send_rtt_threads = Thread(target = send_rtt, args=(server, peers, poc_name, poc_port))
-        send_rtt_threads.start()
+    # if poc_name != "0":
+    send_rtt_threads = Thread(target = send_rtt, args=(server, peers, poc_name, poc_port))
+    send_rtt_threads.start()
+
+    # Receive from Poc and such
+    rec_rtt_threads = Thread(target = rec_rtt, args=(server, peers, poc_name, poc_port))
+    rec_rtt_threads.start()
 
     # while True:
     #     if len(peers) == int(num_of_ringos):
