@@ -11,7 +11,7 @@
 		-> Peer Discovery # Listen for peer discovery - Listen for Keep Alive Signal
 
 	F: (Listen for distance vector listen for data and send data)
-		-> Peer DIscovery
+		-> Peer Discovery
 
-# 
+#
 ———>offline, send, show-matrix-, show-ring, disconnect.
