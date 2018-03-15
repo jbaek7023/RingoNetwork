@@ -39,7 +39,7 @@ def check_numeric(arg, param):
     return val
 
 
-### PEER DISCOVERY FUNCTIONS ###
+### RTT FUNCTIONS ###
 #
 # determineTimeSending - sends messages to PoC and times response; message sent is a randomly-generated 32-character
 #                        string; checks response for matching string, adds time to respond to total time; after a loop of 
@@ -49,17 +49,12 @@ def check_numeric(arg, param):
 #                         
 
 def determineTimeSending(poc_addr, sock): # determine time for ringo's dv
-    
     avgTime = 0.0;
     i = 0;
     while (i < 10):
         try:
-
             initTime = time.monotonic();
-            # message= str(tripTime).encode(); # send the current time
-
             message = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(32)).encode()
-
 
             # Send data
             print('sending time message{!r}'.format(message))
@@ -82,12 +77,6 @@ def determineTimeSending(poc_addr, sock): # determine time for ringo's dv
     print("average time:\t" + str(avgTime));
     sock.close();
 
-#     alive = True    # if user enters command "offline," this is set to false
-#     while alive:
-#         ### listen for commands
-#         alive = False # remove after functionality added
-#     return;
-
 def determineTimeReceiving(sock):   # help adjacent ringo determine time for its dv
     while True:
 
@@ -98,28 +87,12 @@ def determineTimeReceiving(sock):   # help adjacent ringo determine time for its
         print('received {} bytes from {}'.format(
             len(data), address))
 
-
         if data:
-            # data = float(data)
-            # elapsedTime = recTime - data;
             print("data:\t" + str(data))
 
             sent = sock.sendto(data, address)
             print('sent {} bytes back to {}'.format(
                 sent, address))
-#     alive = True    # if user enters command "offline," this is set to false
-#     while alive:
-#         ### listen for commands
-#         alive = False # remove after functionality added
-#     return;
-
-# def msgForward():
-#     alive = True    # if user enters command "offline," this is set to false
-#     while alive:
-#         ### listen for commands
-#         alive = False # remove after functionality added
-#     return;
-
 
 
 def main():
