@@ -26,30 +26,27 @@ def check_flag(role):
 
 def check_numeric(val, arg):
     try:
-   	    val = int(sys.argv[idx])
+        value = int(val)
     except ValueError:
-	    print(arg + " must be an int")
-	    sys.exit(1)
+        print("-")
+        print(val)
+        print(arg + " must be an int")
+        sys.exit(1)
 
 def main():
     if (len(sys.argv) != 6):
         usage();
 
     # python3 ringo.py S 100.0 john 90 90
-    print(sys.argv[1]) # S
-    print(sys.argv[2]) # 100.0
-    print(sys.argv[3]) # john
-    print(sys.argv[4]) # 90
-    print(sys.argv[5]) # 90
-
-    n_size, l_port, poc_port = 0, 0, 0	# size of network, local port #, poc port
-
     # Interpret the argument
     flag = sys.argv[1] # Getting a flag i.e) S, F, R
     local_port = sys.argv[2] # Getting a local port i.e) 23222
     poc_name = sys.argv[3] # Getting the port name i.e) networklab3.cc.gatech.edu
     poc_port = sys.argv[4] # Getting the port number i.e) 8080 or 13445
     num_of_ringos = sys.argv[5] # Getting the number of ringos i.e) 5
+
+    # Define RTT Table
+    rtt = {}
 
     # Checking if we get the right argument types
     check_flag(flag);
@@ -64,10 +61,12 @@ def main():
     # interface_thread = Thread(target = open_interface, args=())
     # interface_thread.start()
 
+
     # QUESTION: Register PoC HERE for its neighbor????
 
-    # If it's server
-    if flag == "S":
+
+    # If it's a Receiver
+    if flag == "R":
         # Creates a serve socket and connect to the
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         host = "127.0.0.1" # local host because it's server
@@ -76,9 +75,19 @@ def main():
         while 1:
             data, addr = server_socket.recvfrom(4086)
             # QUESTION: we're going to handle incoming data here?
-            client_thread = Thread(target=handle_incoming_data, args=(data, addr[0], add[1]))
-            client_thread.start()
+            # client_thread = Thread(target=handle_incoming_data, args=(data, addr[0], add[1]))
+            # client_thread.start()
 
+    # If it's forwarder
+    elif flag == "F":
+        print('Forwarder')
+        # server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # host = "127.0.0.1" # local host because it's server
+        # server_socket.bind((host, local_port))
+
+    # If it's sender
+    elif flag == "S":
+        print("Sender")
 
 if __name__ == "__main__":
     main();
