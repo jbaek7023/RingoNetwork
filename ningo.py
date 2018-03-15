@@ -85,59 +85,44 @@ def receive(local_port, poc_name, poc_port, num_of_ringos):
     # Close the Socket
     server_socket.close()
 
-class MyUDPHandler(socketserver.BaseRequestHandler):
-    """
-    This class works similar to the TCP handler class, except that
-    self.request consists of a pair of data and client socket, and since
-    there is no connection the client address must be given explicitly
-    when sending data back via sendto().
-    """
 
+class MyUDPHandler(socketserver.BaseRequestHandler):
     def handle(self):
-        data = self.request[0].strip()
+        data = self.request[0]
         socket = self.request[1]
-        print("wrote : " + self.client_address[0])
-        print(data)
-        print(self.client_address)
-        socket.sendto(data.upper(), self.client_address)
+        # self.client_address[0] : 127.0.0.1
+        # self.client_address[0] : 12443 port.
+        # print(data.decode("utf-8"))
+        json_obj = json.loads(data.decode("utf-8"))
+        keyword = json_obj['command']
+        peers_response = json_obj['peers']
+        if keyword == "peer_discovery":
+            # we REPLY the peers
+            peers[str(self.client_address)] = 1
+            for key in peers_response:
+                peers[key] = 1
+            print(peers)
+            new_peer_data = json.dumps({
+                'command': 'peer_discovery',
+                'peers': peers})
+            socket.sendto(new_peer_data.encode('utf-8'), self.client_address)
+
+        print(peers)
+
 
 
 def send_rtt(server, peers, poc_name, poc_port):
     poc_address = (poc_name, int(poc_port))
-    peers[str(poc_address)] = 1 # should be peer information though..
+    peers[str(poc_address)] = 1  # should be peer information though..
     peer_data = json.dumps({
         'command': 'peer_discovery',
         'peers': peers})
-    print('Sending it!')
-    print('poc_addres')
+    print(peers)
+    print(poc_address)
     server.socket.sendto(
         peer_data.encode('utf-8'),
         poc_address)
 
-# Receive the response from PoC
-def rec_rtt(server, peers, poc_name, poc_port):
-    print('receiving?')
-    data, addr = server.socket.recvfrom(1024)
-    peers[str(addr)] = 1 # add sender address to its peers
-    print('received?')
-
-    data = data.decode('utf-8')
-    json_obj = json.loads(data)
-    keyword = json_obj['command']
-    peers_response = json_obj['peers']
-    if keyword == "peer_discovery":
-        # we REPLY the peers
-        for key in peers_response:
-            peers[key] = 1
-        print(peers)
-        new_peer_data = json.dumps({
-            'command': 'peer_discovery',
-            'peers': peers})
-        server.socket.sendto(
-            new_peer_data.encode('utf-8'),
-            addr)
-    print(peers)
-    server.serve_forever()
 
 def main():
     if (len(sys.argv) != 6):
@@ -162,88 +147,29 @@ def main():
 
     ###### Peer Discover Here. #
 
-
     # this_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     host = "127.0.0.1"
     # this_socket.bind((host, int(local_port)))
 
     # SOCKET SERVER
     HOST, PORT = host, int(local_port)
+    print((HOST, PORT))
     server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
+    server_thread = Thread(target=server.serve_forever, args=())
+    server_thread.daemon = True
+    server_thread.start()
 
-    # Send to PoC
-    # if poc_name != "0":
-    send_rtt_threads = Thread(target = send_rtt, args=(server, peers, poc_name, poc_port))
-    send_rtt_threads.start()
+    while len(peers) < int(num_of_ringos):
+        # Send to PoC
+        # send_rtt_threads = Thread(target=send_rtt, args=(server, peers, poc_name, poc_port))
+        if poc_name != "0":
+            send_rtt(server, peers, poc_name, poc_port)
+            # send_rtt_threads.start()
+        time.sleep(1)
 
-    # Receive from Poc and such
-    rec_rtt_threads = Thread(target = rec_rtt, args=(server, peers, poc_name, poc_port))
-    rec_rtt_threads.start()
-
-    # while True:
-    #     if len(peers) == int(num_of_ringos):
-    #         # the length of rtt_table is N, break!.
-    #         print('break')
-    #         break
-    #     # send our rtt table to poc (if it has a PoC)
-    #     if poc_name != "0":
-    #         poc_address = (poc_name, int(poc_port))
-    #         peers[str(poc_address)] = 1 # should be peer information though..
-    #         peer_data = json.dumps({
-    #             'command': 'peer_discovery',
-    #             'peers': peers})
-    #         print('Sending it!')
-    #         print('poc_addres')
-    #         this_socket.sendto(
-    #             peer_data.encode('utf-8'),
-    #             poc_address)
-    #
-    #     # Receive the response from PoC
-    #     print('receiving?')
-    #     data, addr = this_socket.recvfrom(1024)
-    #     peers[str(addr)] = 1 # add sender address to its peers
-    #     print('received?')
-    #
-    #     data = data.decode('utf-8')
-    #     json_obj = json.loads(data)
-    #     keyword = json_obj['command']
-    #     peers_response = json_obj['peers']
-    #     if keyword == "peer_discovery":
-    #         # we REPLY the peers
-    #         for key in peers_response:
-    #             peers[key] = 1
-    #         print(peers)
-    #         new_peer_data = json.dumps({
-    #             'command': 'peer_discovery',
-    #             'peers': peers})
-    #         this_socket.sendto(
-    #             new_peer_data.encode('utf-8'),
-    #             addr)
-    #     print(peers)
-    time.sleep(1)
-
-    # this_socket.close()
-    # print('End of Peer Discovery')
-    print('Peer Discovery Is Done: ')
+    print("Peer Discovery Complete")
     print(peers)
 
-
-    # We can open the Command Line interface HERE?
-    # interface_thread = Thread(target = open_interface, args=())
-    # interface_thread.start()
-
-    # flag, local_port, poc_name, poc_port, num_of_ringos
-    # If it's a Receiver
-    # if flag == "R":
-    #     receive(local_port, poc_name, poc_port, num_of_ringos)
-    #
-    # # If it's forwarder
-    # elif flag == "F":
-    #     forward(local_port, poc_name, poc_port, num_of_ringos)
-    #
-    # # If it's sender
-    # elif flag == "S":
-    #     send(local_port, poc_name, poc_port, num_of_ringos)
 
 if __name__ == "__main__":
     main();
