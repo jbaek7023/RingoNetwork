@@ -52,9 +52,6 @@ def send(local_port, poc_name, poc_port, num_of_ringos):
             server_address)
 
 # Peer Rescovery
-### put it on ringo lists, keep them asking for the neighbors. Let them know asking for header.
-### == whatevers. check header.
-
 def forward(local_port, poc_name, poc_port, num_of_ringos):
     print('Forwarder')
     # Forwarder Peer Discovery
@@ -124,6 +121,7 @@ def main():
                 'command': 'peer_discovery',
                 'peers': peers})
             print('Sending it!')
+            print(poc_address)
             this_socket.sendto(
                 peer_data.encode('utf-8'),
                 poc_address)
@@ -158,7 +156,7 @@ def main():
     print(peers)
 
 
-    # QUESTION: We can open the Command Line interface HERE?
+    # We can open the Command Line interface HERE?
     # interface_thread = Thread(target = open_interface, args=())
     # interface_thread.start()
 
