@@ -3,11 +3,17 @@
 # a Ringo node using the Reliable Data Transfer protocol, using skeletal code based on
 # socket_echo_server_dgram.py and socket_echo_client_dgram.py from https://pymotw.com/3/socket/udp.html
 #
+# random string generator borrowed from 
+# https://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits-in-python
+#
 # each ringo acts as client and server; must find local and foreign addresses, bind local address to port
 
 import socket
 import sys
 import time
+import random
+import string
+
 
 def usage():
     print ("Usage: \n\tpython ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N> ");
@@ -32,39 +38,49 @@ def check_numeric(arg, param):
 	    sys.exit(1)
     return val
 
-def peerDiscovery(poc_addr, sock, message):
-    try:
 
-        # Send data
-        print('sending {!r}'.format(message))
-        sent = sock.sendto(message, poc_addr)
+### PEER DISCOVERY FUNCTIONS ###
+#
+# determineTimeSending - sends messages to PoC and times response; message sent is a randomly-generated 32-character
+#                        string; checks response for matching string, adds time to respond to total time; after a loop of 
+#                        ten, prints average
+#
+# determineTimeReceiving - receives messages from ringo for whom this ringo is PoC; sends back message as acknowledgement
+#                         
 
-        # Receive response
-        print('waiting to receive')
-        data, server = sock.recvfrom(4096)
-        print('received {!r}'.format(data))
-
-    finally:
-        print('closing socket')
-        sock.close()
+def determineTimeSending(poc_addr, sock): # determine time for ringo's dv
     
+    avgTime = 0.0;
+    i = 0;
+    while (i < 10):
+        try:
+
+            initTime = time.monotonic();
+            # message= str(tripTime).encode(); # send the current time
+
+            message = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(32)).encode()
 
 
-def msgSend(poc_addr, sock, message):
-    try:
+            # Send data
+            print('sending time message{!r}'.format(message))
+            sent = sock.sendto(message, poc_addr)
 
-        # Send data
-        print('sending {!r}'.format(message))
-        sent = sock.sendto(message, poc_addr)
+            # Receive response
+            print('waiting to receive')
+            data, server = sock.recvfrom(4096)
+            print('received {!r}'.format(data))
+            # data = float(data);
+            if (data != message):
+                print("received unexpected message");
+                sys.exit(1);
+            roundTripTime = time.monotonic() - initTime;  
+            avgTime += float(roundTripTime);
+        finally:
+            i += 1;
 
-        # Receive response
-        print('waiting to receive')
-        data, server = sock.recvfrom(4096)
-        print('received {!r}'.format(data))
-
-    finally:
-        print('closing socket')
-        sock.close()
+    avgTime /= 10;
+    print("average time:\t" + str(avgTime));
+    sock.close();
 
 #     alive = True    # if user enters command "offline," this is set to false
 #     while alive:
@@ -72,16 +88,22 @@ def msgSend(poc_addr, sock, message):
 #         alive = False # remove after functionality added
 #     return;
 
-def msgReceive(sock):
+def determineTimeReceiving(sock):   # help adjacent ringo determine time for its dv
     while True:
+
         print('\nwaiting to receive message')
         data, address = sock.recvfrom(4096)
 
+        recTime = time.monotonic()  # time of recepion
         print('received {} bytes from {}'.format(
             len(data), address))
-        print(data)
+
 
         if data:
+            # data = float(data)
+            # elapsedTime = recTime - data;
+            print("data:\t" + str(data))
+
             sent = sock.sendto(data, address)
             print('sent {} bytes back to {}'.format(
                 sent, address))
@@ -104,6 +126,14 @@ def main():
 
     # tm = time.monotonic();
     # print(tm);
+    # tm -= 3;
+    # print(tm);
+    # strtm = str(tm);
+    # print(strtm);
+    # sys.exit(1);
+
+    # print(sys.version);
+
     # sys.exit(1);
 
     if (len(sys.argv) != 6):
@@ -140,16 +170,14 @@ def main():
     ### Seems like threads should be used to listen and speak to ports for message, listen and speak to ports for "keep-alives",
     ### and listen for commands;
 
-    message = "hello";
-
     if (role is "S"):
-        msgSend(poc_addr, sock, message);
+        determineTimeSending(poc_addr, sock);
 
     elif (role is "F"):
         msgForward();
 
     elif (role is "R"):
-        msgReceive(sock);
+        determineTimeReceiving(sock);
 
 
     
