@@ -99,7 +99,7 @@ def main():
     peers = {}
 
     # Checking if we get the right argument types
-    check_flag(flag);
+    check_flag(flag)
     check_numeric(local_port, "local-port");
     check_numeric(poc_port, "PoC-port");
     check_numeric(num_of_ringos, "N");
