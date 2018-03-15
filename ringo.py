@@ -109,7 +109,7 @@ def main():
     ###### Peer Discover Here. #
     this_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     host = "127.0.0.1"
-    # this_socket.bind((host, int(local_port)))
+    this_socket.bind((host, int(local_port)))
 
     while True:
         if len(peers) == int(num_of_ringos):
