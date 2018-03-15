@@ -144,13 +144,28 @@ def main():
         keyword = json_obj['command']
         peers_response = json_obj['peers']
         if keyword == "peer_discovery":
-            print('discovery?')
-            shared_items = set(peers.items()) | set(peers_response.items())
-            peers = shared_items
+            # we REPLY the peers
+            print("=====")
+            print('print')
+            print(peers)
+            print(peers_response)
+            print('--')
+            for key in peers_response:
+                peers[key] = 1
+            print(peers)
+            new_peer_data = json.dumps({
+                'command': 'peer_discovery',
+                'peers': peers})
+            print('what is new peer data')
+            print(peers)
+            this_socket.sendto(
+                new_peer_data.encode('utf-8'),
+                addr)
+
 
     this_socket.close()
-    print('End of Peer Discovery')
-    print('Peers List')
+    # print('End of Peer Discovery')
+    print('Peers List: ')
     print(peers)
 
 
@@ -163,16 +178,16 @@ def main():
 
     # flag, local_port, poc_name, poc_port, num_of_ringos
     # If it's a Receiver
-    if flag == "R":
-        receive(local_port, poc_name, poc_port, num_of_ringos)
-
-    # If it's forwarder
-    elif flag == "F":
-        forward(local_port, poc_name, poc_port, num_of_ringos)
-
-    # If it's sender
-    elif flag == "S":
-        send(local_port, poc_name, poc_port, num_of_ringos)
+    # if flag == "R":
+    #     receive(local_port, poc_name, poc_port, num_of_ringos)
+    #
+    # # If it's forwarder
+    # elif flag == "F":
+    #     forward(local_port, poc_name, poc_port, num_of_ringos)
+    #
+    # # If it's sender
+    # elif flag == "S":
+    #     send(local_port, poc_name, poc_port, num_of_ringos)
 
 if __name__ == "__main__":
     main();

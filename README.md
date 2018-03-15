@@ -15,4 +15,7 @@
 
 # offline, send, show-matrix-, show-ring, disconnect.
 
-peer discovery -> 
+peer discovery ->
+
+# Port Number
+ps -fA | grep python
