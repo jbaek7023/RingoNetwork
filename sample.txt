@@ -1,0 +1,42 @@
+####TO-DO
+1. Connect Sender - Receiver -> Working
+2. Forwarder Working
+3. Distance Vector
+
+##(1)## Test Receiver and Sender
+# Create a Ringo Receiver (Server)
+python3 ringo.py R 23222 127.0.0.1 0 2
+-> localhost:23222 / 0: poc port number / 2 is the size of the ringos
+-> "running server"
+
+# Sender ( Client )
+python3 ringo.py S 23000 127.0.0.1 23222 2
+-> ""
+-(2)-> send distance vector (JSON)
+
+##(2)## Test Receiver and Sender and Forwarder
+# Create a Ringo Receiver (Server)
+python3 ringo.py R 23222 127.0.0.1 0 2
+-> localhost:23222 / 0: poc port number / 2 is the size of the ringos
+-> "running server"
+
+# Sender ( Client )
+python3 ringo.py S 23000 127.0.0.1 23222 2
+-> ""
+-(2)-> send distance vector (JSON)
+
+# Forwarder does the same thing.
+
+###############
+100 -> 90 -> 30 (RECEIVER)
+
+python3 ringo.py R 30 127.0.0.1 0 2
+=> (Once you start, show ringo list)
+
+python3 ringo.py F 90 127.0.0.1 30 2
+=>
+
+python3 ringo.py S 100 127.0.0.1 90 2
+=>
+
+### make sure you use public IP (comment)

@@ -13,5 +13,6 @@
 	F: (Listen for distance vector listen for data and send data)
 		-> Peer Discovery
 
-#
-———>offline, send, show-matrix-, show-ring, disconnect.
+# offline, send, show-matrix-, show-ring, disconnect.
+
+peer discovery -> 
