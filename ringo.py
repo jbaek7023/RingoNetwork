@@ -2,6 +2,8 @@
 #
 # a Ringo node using the Reliable Data Transfer protocol, using skeletal code based on
 # socket_echo_server_dgram.py and socket_echo_client_dgram.py from https://pymotw.com/3/socket/udp.html
+#
+# each ringo acts as client and server; must find local and foreign addresses, bind local address to port
 
 import socket
 import sys
@@ -12,19 +14,17 @@ import json
 
 import operator
 
-# Supporting addition, subtraction, multiplication and division.
-
 def usage():
     print ("Usage: python ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
     sys.exit(1)
 
-def check_flag(role):
-    if (sys.argv[1]=="S"):
-        role = "S"
-    elif (sys.argv[1]=="F"):
-        role = "F"
-    elif (sys.argv[1]=="R"):
-        role = "R"
+def check_flag(flag):
+    if (flag=="S"):
+        return "S"
+    elif (flag=="F"):
+        return "F"
+    elif (flag=="R"):
+        return "R"
     else:
         usage()
 
@@ -55,8 +55,7 @@ def send(local_port, poc_name, poc_port, num_of_ringos):
 def forward(local_port, poc_name, poc_port, num_of_ringos):
     print('Forwarder')
     # Forwarder Peer Discovery
-
-
+    
 # Not YET
 def handle_incoming_data(data, peer_ip, peer_port):
     json_obj = json.loads(data)
@@ -122,7 +121,7 @@ def main():
                 'command': 'peer_discovery',
                 'peers': peers})
             print('Sending it!')
-            print('poc_addres')
+            print(poc_address)
             this_socket.sendto(
                 peer_data.encode('utf-8'),
                 poc_address)
