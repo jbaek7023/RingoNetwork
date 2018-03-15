@@ -110,13 +110,9 @@ def main():
     ###### Peer Discover Here. #
     this_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     host = "127.0.0.1"
-    print(local_port)
-    this_socket.bind((host, int(local_port)))
+    # this_socket.bind((host, int(local_port)))
 
     while True:
-        print('loop')
-        print(len(peers))
-        print(num_of_ringos)
         if len(peers) == int(num_of_ringos):
             # the length of rtt_table is N, break!.
             print('break')
@@ -125,56 +121,47 @@ def main():
         if poc_name != "0":
             poc_address = (poc_name, int(poc_port))
             peers[str(poc_address)] = 1 # should be peer information though..
-            print("here")
-            print(peers)
             peer_data = json.dumps({
                 'command': 'peer_discovery',
                 'peers': peers})
+            print('Sending it!')
             this_socket.sendto(
                 peer_data.encode('utf-8'),
                 poc_address)
 
         # Receive the response from PoC
+        print('receiving?')
         data, addr = this_socket.recvfrom(1024)
         peers[str(addr)] = 1 # add sender address to its peers
+        print('received?')
 
         data = data.decode('utf-8')
-        print(data)
         json_obj = json.loads(data)
         keyword = json_obj['command']
         peers_response = json_obj['peers']
         if keyword == "peer_discovery":
             # we REPLY the peers
-            print("=====")
-            print('print')
-            print(peers)
-            print(peers_response)
-            print('--')
             for key in peers_response:
                 peers[key] = 1
             print(peers)
             new_peer_data = json.dumps({
                 'command': 'peer_discovery',
                 'peers': peers})
-            print('what is new peer data')
-            print(peers)
             this_socket.sendto(
                 new_peer_data.encode('utf-8'),
                 addr)
-
+        print(peers)
+        time.sleep(1)
 
     this_socket.close()
     # print('End of Peer Discovery')
-    print('Peers List: ')
+    print('Peer Discovery Is Done: ')
     print(peers)
 
 
     # QUESTION: We can open the Command Line interface HERE?
     # interface_thread = Thread(target = open_interface, args=())
     # interface_thread.start()
-
-
-    # QUESTION: Register PoC HERE for its neighbor????
 
     # flag, local_port, poc_name, poc_port, num_of_ringos
     # If it's a Receiver
