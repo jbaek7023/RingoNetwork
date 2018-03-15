@@ -10,6 +10,7 @@ from threading import Thread
 from datetime import datetime
 import time
 import json
+import timeit
 
 import operator
 
@@ -37,51 +38,37 @@ def check_numeric(val, arg):
         print(arg + " must be an int")
         sys.exit(1)
 
-def send(local_port, poc_name, poc_port, num_of_ringos):
-    server_address = (poc_name, int(poc_port))  # server address
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    while True:
-        sendData = input("> ")
-        if sendData is None:
-            break
-
-        # send the request
-        client_socket.sendto(
-            sendData.encode('utf-8'),
-            server_address)
-
-# Peer Rescovery
-def forward(local_port, poc_name, poc_port, num_of_ringos):
-    print('Forwarder')
-    # Forwarder Peer Discovery
-
-
-# Not YET
-def handle_incoming_data(data, peer_ip, peer_port):
-    json_obj = json.loads(data)
-    keyword = json_obj['command']
-    # print(keyword)
-
-def receive(local_port, poc_name, poc_port, num_of_ringos):
-    host = "127.0.0.1"
-    # AF_INET: Internet Iv4
-    # SOCK_DGRAM: UDP Protocol
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    # server_socket.bind((host, int(local_port)))
-
-    while True:
-        data, addr = server_socket.recvfrom(1024)
-        data = data.decode('utf-8')
-
-        client_thread = Thread(target=handle_incoming_data, args=(data, addr[0], addr[1]))
-        client_thread.start()
-
-        print('message from user: ' + str(addr))
-        print('from connected user: ' + data)
-
-    # Close the Socket
-    server_socket.close()
+# Peer Forwarder
+# def forward(local_port, poc_name, poc_port, num_of_ringos):
+#     print('Forwarder')
+#     # Forwarder Peer Discovery
+#
+#
+# # Not YET
+# def handle_incoming_data(data, peer_ip, peer_port):
+#     json_obj = json.loads(data)
+#     keyword = json_obj['command']
+#     # print(keyword)
+#
+# def receive(local_port, poc_name, poc_port, num_of_ringos):
+#     host = "127.0.0.1"
+#     # AF_INET: Internet Iv4
+#     # SOCK_DGRAM: UDP Protocol
+#     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+#     # server_socket.bind((host, int(local_port)))
+#
+#     while True:
+#         data, addr = server_socket.recvfrom(1024)
+#         data = data.decode('utf-8')
+#         client_thread = Thread(target=handle_incoming_data, args=(data, addr[0], addr[1]))
+#         client_thread.start()
+#
+#         print('message from user: ' + str(addr))
+#         print('from connected user: ' + data)
+#
+#     # Close the Socket
+#     server_socket.close()
 
 
 class MyUDPHandler(socketserver.BaseRequestHandler):
@@ -96,21 +83,24 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
         peers_response = json_obj['peers']
         if keyword == "peer_discovery":
             # we REPLY the peers
-            peers[str(self.client_address)] = 1
+            peers[str(self.client_address)] = time.time() - json_obj['when']
             for key in peers_response:
-                peers[key] = 1
+                peers[key] = time.time() - json_obj['when']
             new_peer_data = json.dumps({
                 'command': 'peer_discovery',
-                'peers': peers})
+                'peers': peers,
+                'when': time.time()})
+                # when it's sent?
             socket.sendto(new_peer_data.encode('utf-8'), self.client_address)
 
 
 def send_rtt(server, peers, poc_name, poc_port):
     poc_address = (poc_name, int(poc_port))
-    peers[str(poc_address)] = 1  # should be peer information though..
+    # peers[str(poc_address)] = 0  # We don't know the RTT btw this ringo and PoC yet
     peer_data = json.dumps({
         'command': 'peer_discovery',
-        'peers': peers})
+        'peers': peers,
+        'when': time.time()})
     server.socket.sendto(
         peer_data.encode('utf-8'),
         poc_address)
@@ -152,6 +142,7 @@ def main():
             # send_rtt_threads.start()
         time.sleep(1)
 
+
     print("Peer Discovery Result")
     print(peers)
 
@@ -159,5 +150,6 @@ def main():
 
     # Command Line Here
 
+
 if __name__ == "__main__":
-    main();
+    main()
