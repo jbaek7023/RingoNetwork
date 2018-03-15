@@ -10,9 +10,13 @@
 
 import socket
 import sys
+
 import time
 import random
 import string
+
+import _thread
+import threading
 
 
 def usage():
@@ -61,21 +65,19 @@ def determineTimeSending(poc_addr, sock): # determine time for ringo's dv
             sent = sock.sendto(message, poc_addr)
 
             # Receive response
-            print('waiting to receive')
-            data, server = sock.recvfrom(4096)
-            print('received {!r}'.format(data))
-            # data = float(data);
-            if (data != message):
-                print("received unexpected message");
-                sys.exit(1);
-            roundTripTime = time.monotonic() - initTime;  
-            avgTime += float(roundTripTime);
+            print('waiting to receive');
+            data, server = sock.recvfrom(4096);
+            print('received {!r}'.format(data));
+
+            if (data == message):   # respond only to replies to messages sent
+                roundTripTime = time.monotonic() - initTime;  
+                avgTime += float(roundTripTime);
         finally:
             i += 1;
 
     avgTime /= 10;
     print("average time:\t" + str(avgTime));
-    sock.close();
+    # sock.close();
 
 def determineTimeReceiving(sock):   # help adjacent ringo determine time for its dv
     while True:
@@ -83,7 +85,6 @@ def determineTimeReceiving(sock):   # help adjacent ringo determine time for its
         print('\nwaiting to receive message')
         data, address = sock.recvfrom(4096)
 
-        recTime = time.monotonic()  # time of recepion
         print('received {} bytes from {}'.format(
             len(data), address))
 
@@ -106,6 +107,7 @@ def main():
     # sys.exit(1);
 
     # print(sys.version);
+    
 
     # sys.exit(1);
 
@@ -143,14 +145,27 @@ def main():
     ### Seems like threads should be used to listen and speak to ports for message, listen and speak to ports for "keep-alives",
     ### and listen for commands;
 
-    if (role is "S"):
-        determineTimeSending(poc_addr, sock);
+    try:
+        t1 = threading.Thread(target=determineTimeSending, args=(poc_addr, sock));
+        t1.start();
+        # t1.join(timeout = 5);
+        _thread.start_new_thread(determineTimeReceiving, (sock));
 
-    elif (role is "F"):
-        msgForward();
+    except:
+        print ("Error: unable to start thread")
 
-    elif (role is "R"):
-        determineTimeReceiving(sock);
+    while(1):
+        pass
+
+
+    # if (role is "S"):
+    #     _thread.start_new_thread(determineTimeSending(poc_addr, sock));
+
+    # elif (role is "F"):
+    #     msgForward();
+
+    # elif (role is "R"):
+    #     _thread.start_new_thread(determineTimeReceiving(sock));
 
 
     

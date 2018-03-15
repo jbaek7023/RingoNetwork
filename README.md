@@ -17,7 +17,7 @@
 ———>offline, send, show-matrix-, show-ring, disconnect.
 
 
-PEER DISCOVERY
+RTT
 These are the tests conducted on the way to peer discovery:
 1) 2 nodes, 1 peer each, send message
 	found error in approach; only bind local socket
