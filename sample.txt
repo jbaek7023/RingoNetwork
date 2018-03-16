@@ -30,13 +30,13 @@ python3 ringo.py S 23000 127.0.0.1 23222 2
 ###############
 100 -> 90 -> 30 (RECEIVER)
 
-python3 ringo.py R 30 127.0.0.1 0 2
+python3 ningo.py R 8000 0 0 3
 => (Once you start, show ringo list)
 
-python3 ringo.py F 90 127.0.0.1 30 2
+python3 ningo.py F 9000 127.0.0.1 8000 3
 =>
 
-python3 ringo.py S 100 127.0.0.1 90 2
+python3 ningo.py S 9002 127.0.0.1 9000 3
 =>
 
 ### make sure you use public IP (comment)
