@@ -15,6 +15,7 @@ import ast
 
 # Supporting addition, subtraction, multiplication and division.
 peers = {}
+rtt_matrix = {}
 
 def usage():
     print ("Usage: python ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
@@ -80,37 +81,74 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
         json_obj = json.loads(data.decode("utf-8"))
         keyword = json_obj.get('command')
         peers_response = json_obj.get('peers')
+
         if keyword == "peer_discovery":
             peers[str(self.client_address)] = 1  # Add to the Peer List
+            ttl = json_obj['ttl'] - 1
 
             for key in peers_response:
                 peers[key] = 1
             new_peer_data = json.dumps({
                 'command': 'peer_discovery',
                 'peers': peers,
+                'ttl': ttl
             })
-            socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
-
+            # num_of_ringos = sys.argv[5]
+            if ttl > 0:
+                socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
         elif keyword == "find_rtt":
             rtt_count = json_obj['rtt_count']
             rtt_created = json_obj['created']
             if rtt_count == 1:
-                rtt_count = rtt_count + 1
+                rtt_count = 2
                 new_peer_data = json.dumps({
                     'command': 'find_rtt',
                     'rtt_count': rtt_count,
-                    'created': rtt_created
+                    'created': rtt_created,
                 })
                 socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
             elif rtt_count == 2:
                 # Update RTT table
                 rtt_value = time.time() - json_obj['created']
-                peers[str(self.client_address)] = rtt_value
-                print(peers)
+                if peers.get(str(self.client_address)):
+                    peers[str(self.client_address)] = rtt_value
+                # print(peers)
+                print('Received!')
+            else:
+                print('This should not happen')
+        elif keyword =="send_rtt_vector":
+            # Receive a distance vector
+            peers_response = json_obj['peers']
+            ttl = json_obj['ttl'] - 1
+
+            rtt_matrix[str(self.client_address)] = peers_response
+
+            new_rtt_peer_data = json.dumps({
+                'command': 'send_rtt_vector',
+                'peers': peers,
+                'ttl': ttl
+            })
+            if ttl > 0:
+                socketo.sendto(new_rtt_peer_data.encode('utf-8'), self.client_address)
         else:
             print(keyword)
             print('Invalid Packet')
 
+
+def send_rtt_vector(server, peers, poc_name, poc_port):
+    # We're sending RTT when it's the first one.
+    poc_address = (poc_name, int(poc_port))
+    # peers[str(poc_address)] = 0  # We don't know the RTT btw this ringo and PoC yet
+    peer_data = json.dumps({
+        'command': 'send_rtt_vector',
+        'peers': peers,
+        'ttl': 6,
+        })
+
+    server.socket.sendto(
+        peer_data.encode('utf-8'),
+        poc_address
+        )
 
 def discovery(server, peers, poc_name, poc_port):
     # We're sending RTT when it's the first one.
@@ -119,13 +157,15 @@ def discovery(server, peers, poc_name, poc_port):
     peer_data = json.dumps({
         'command': 'peer_discovery',
         'peers': peers,
+        'ttl': 6,
         })
+
     server.socket.sendto(
         peer_data.encode('utf-8'),
         poc_address
         )
 
-def sendrtt(server, peer_name, peer_port):
+def findrtt(server, peer_name, peer_port):
     # We're sending RTT when it's the first one.
     peer_address = (peer_name, int(peer_port))
 
@@ -133,7 +173,7 @@ def sendrtt(server, peer_name, peer_port):
     peer_data = json.dumps({
         'command': 'find_rtt',
         'created': time.time(),
-        'rtt_count': 1
+        'rtt_count': 1,
         })
     server.socket.sendto(
         peer_data.encode('utf-8'),
@@ -172,41 +212,53 @@ def main():
     while len(peers) < int(num_of_ringos):
         # if it's not the first ringo,
         if poc_name != "0":
-            # Send to PoC # Peer Discovery
-            discovery(server, peers, poc_name, poc_port)
-        time.sleep(1)
+            if poc_port != "0":
+                # Send to PoC # Peer Discovery
+                discovery(server, peers, poc_name, poc_port)
 
     print("Peer Discovery Result")
-    count = 1
     for item in list(peers.keys()):
         peer_address = ast.literal_eval(item)[0]
         peer_port = ast.literal_eval(item)[1]
-        # Sending RTT to every peer at this time
-        sendrtt(server, peer_address, peer_port)
+        print(str(peer_address) + ":" + str(peer_port))
 
-        print(str(count) + " - " + str(peer_address) + ":" + str(peer_port))
-        count = count + 1
-    print("---------------------")
-
-    # RTT matrix
-    print("RTT Table of this Ringo")
-    for item in list(peers.keys()):
-        # peer_address = ast.literal_eval(item)[0]
-        # peer_port = ast.literal_eval(item)[1]
-        sendrtt(server, peer_address, peer_port)
-
-    # Send Packets maybe 10 times!
+    time.sleep(2)
+    # Find RTT.
     while True:
         if 1 not in peers.values():
+            print(peers.values())
+            print('Just printed Distance Vector')
             break
         else:
+            for item in list(peers.keys()):
+                peer_address = ast.literal_eval(item)[0]
+                peer_port = ast.literal_eval(item)[1]
+                # Sending RTT to every peer at this time
+                findrtt(server, peer_address, peer_port)
             time.sleep(1)
-            print(peers.values())
+
+    print("-------Printing Distance Vector of this Ringo--------")
+    # Adding our distance vector to our RTT matrix
+    rtt_matrix[str((HOST, PORT))] = peers
+
+    print("RTT Table of this Ringo")
+
+    while True:
+        for item in list(peers.keys()):
+            peer_address = ast.literal_eval(item)[0]
+            peer_port = ast.literal_eval(item)[1]
+            send_rtt_vector(server, peers, peer_address, peer_port)
+        if len(rtt_matrix) == int(num_of_ringos):
+            print("done!")
+            break;
+
+    print(rtt_matrix)
+    print('----END OF RTT Table')
     # Command Line Here
-    for item in list(peers.keys()):
-        peer_address = ast.literal_eval(item)[0]
-        peer_port = ast.literal_eval(item)[1]
-        print(str(peer_address) + ":" + str(peer_port) + " - " + str(peers[item]))
+    # for item in list(peers.keys()):
+    #     peer_address = ast.literal_eval(item)[0]
+    #     peer_port = ast.literal_eval(item)[1]
+    #     print(str(peer_address) + ":" + str(peer_port) + " - " + str(peers[item]))
 
     print('---------------------')
 
