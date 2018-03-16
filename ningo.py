@@ -2,6 +2,10 @@
 #
 # a Ringo node using the Reliable Data Transfer protocol, using skeletal code based on
 # socket_echo_server_dgram.py and socket_echo_client_dgram.py from https://pymotw.com/3/socket/udp.html
+#
+# bestRing() is a slightly modified version of the function of a brute-force solution created by Simon Westphahl <westphahl@gmail.com>;
+# modifications made include renaming and converting to python3
+#
 
 import socket
 import socketserver
@@ -286,17 +290,35 @@ def main():
     print ("Start: " + str((HOST, PORT)))
 
     # matrixKeys = 
-    nextNode = list(rtt_matrix)[0]
-    if (nextNode == str((HOST, PORT))):
-        nextNode = list(rtt_matrix)[1]
-    findRing(nextNode, rtt_matrix, [], 0)
+    local = str((HOST,PORT))
+    findRing(local, rtt_matrix, [], 0)
     print ("\n")
     routes.sort()
     if len(routes) != 0:
         print ("Shortest route: %s" % routes[0])
     else:
-        print ("FAIL!")
+        print ("FAILED TO FIND OPTIMAL RING")
+
     # Command Line Here
+    print("----")
+    print('(enter commands)')
+
+    while True:
+        text = input('') 
+
+        if (text == 'show-matrix'):
+            print(rtt_matrix)
+            print('')
+
+        if (text == 'show-ring'):
+            print(routes[0])
+            print('')
+
+        if (text == 'disconnect'):
+            print('Goody-bye!')
+            print('')
+            sys.exit(1)
+
 
 
     # for item in list(peers.keys()):
@@ -304,7 +326,8 @@ def main():
     #     peer_port = ast.literal_eval(item)[1]
     #     print(str(peer_address) + ":" + str(peer_port) + " - " + str(peers[item]))
 
-    print('---------------------')
+    
+    
 
 if __name__ == "__main__":
     main()
