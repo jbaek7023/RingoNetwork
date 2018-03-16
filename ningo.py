@@ -15,6 +15,7 @@ import ast
 
 # Supporting addition, subtraction, multiplication and division.
 peers = {}
+rtt_matrix = {}
 
 def usage():
     print ("Usage: python ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
@@ -80,6 +81,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
         json_obj = json.loads(data.decode("utf-8"))
         keyword = json_obj.get('command')
         peers_response = json_obj.get('peers')
+
         if keyword == "peer_discovery":
             peers[str(self.client_address)] = 1  # Add to the Peer List
 
@@ -88,8 +90,14 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             new_peer_data = json.dumps({
                 'command': 'peer_discovery',
                 'peers': peers,
+                'ttl': json_obj['ttl'] - 1,
             })
-            socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
+
+            if 'ttl' in json_obj: # or json_obj['peers'] < num_of_ringos: #and len(peers) < int(num_of_ringos):
+                print(json_obj['ttl'])
+                if json_obj['ttl'] > 0 or len(json_obj['peers']) < int(num_of_ringos):
+                    socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
+
 
         elif keyword == "find_rtt":
             rtt_count = json_obj['rtt_count']
@@ -119,6 +127,7 @@ def discovery(server, peers, poc_name, poc_port):
     peer_data = json.dumps({
         'command': 'peer_discovery',
         'peers': peers,
+        'ttl': 10,
         })
     server.socket.sendto(
         peer_data.encode('utf-8'),
@@ -133,7 +142,7 @@ def sendrtt(server, peer_name, peer_port):
     peer_data = json.dumps({
         'command': 'find_rtt',
         'created': time.time(),
-        'rtt_count': 1
+        'rtt_count': 1,
         })
     server.socket.sendto(
         peer_data.encode('utf-8'),
@@ -151,6 +160,7 @@ def main():
     local_port = sys.argv[2]  # Getting a local port i.e) 23222
     poc_name = sys.argv[3]  # Getting the port name i.e) networklab3.cc.gatech.edu
     poc_port = sys.argv[4]  # Getting the port number i.e) 8080 or 13445
+    global num_of_ringos
     num_of_ringos = sys.argv[5]  # Getting the number of ringos i.e) 5
 
     # Define RTT Table
