@@ -16,6 +16,7 @@ import time
 import json
 import timeit
 import ast
+import socket
 
 # Supporting addition, subtraction, multiplication and division.
 peers = {}
@@ -213,8 +214,11 @@ def findRing(node, cities, path, distance):
             findRing(city, dict(cities), list(path), distance)
 
 def main():
+
     if (len(sys.argv) != 6):
         usage()
+
+    print('Host name: '+ str(socket.gethostbyname(socket.gethostname())))
 
     # Interpret the argument
     # python3 ringo.py S 100.0 john 90 90
@@ -233,7 +237,8 @@ def main():
     check_numeric(num_of_ringos, "N")
 
     # Peer Discover Here. #
-    host = "127.0.0.1"
+    # host = "127.0.0.1"
+    host = socket.gethostbyname(socket.gethostname())
     HOST, PORT = host, int(local_port)
     server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
     server_thread = Thread(target=server.serve_forever, args=())
