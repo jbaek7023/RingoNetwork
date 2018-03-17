@@ -25,7 +25,7 @@ routes = [] # for use in findRing()
 
 
 def usage():
-    print ("Usage: python ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
+    print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
     sys.exit(1)
 
 def check_flag(role):
