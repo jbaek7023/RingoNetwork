@@ -45,6 +45,31 @@ jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 7020 127.0.0.1 
 jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 7000 127.0.0.1 7020 5
 jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py F 9020 127.0.0.1 7000 5
 
-# Running two Ringos on network labs
+# Running two Ringos on network labs (local)
 [jbaek60@networklab1 ~]$ python3 ringo.py R 9000 0 0 2
 [jbaek60@networklab1 ~]$ python3 ringo.py R 9001 127.0.0.1 9000 2
+
+# Running five Ringos on network labs (different)
+[jbaek60@networklab1 ~]$ python3 ringo.py R 9000 0 0 5
+[jbaek60@networklab2 ~]$ python3 ringo.py R 9001 networklab1.cc.gatech.edu 9000 5
+[jbaek60@networklab3 ~]$ python3 ringo.py R 9002 networklab1.cc.gatech.edu 9000 5
+[jbaek60@networklab4 ~]$ python3 ringo.py R 9010 networklab3.cc.gatech.edu 9002 5
+[jbaek60@networklab5 ~]$ python3 ringo.py R 9012 networklab2.cc.gatech.edu 9001 5
+
+Result:
+[jbaek60@networklab1 ~]$ python3 ringo.py R 9000 0 0 5
+WELCOME TO RINGO
+Peer Discovery Result
+130.207.107.13:9001
+130.207.107.12:9000
+130.207.107.14:9002
+130.207.107.15:9010`
+130.207.107.16:9012
+Finding Distance Vector of this Ringo...
+Finishing Finding RTT Matrix..
+
+
+Enter Commands (show-matrix, show-ring or disconnect)
+> show-ring
+The Total Cost: 0.8004410266876221
+The Optimal Ring path: ["('130.207.107.12', 9000)", "('130.207.107.13', 9001)", "('130.207.107.14', 9002)", "('130.207.107.16', 9012)", "('130.207.107.15', 9010)", "('130.207.107.12', 9000)"]
