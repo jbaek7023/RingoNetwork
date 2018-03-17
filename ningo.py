@@ -218,8 +218,9 @@ def main():
     if (len(sys.argv) != 6):
         usage()
 
-    print('Host name: '+ str(socket.gethostbyname(socket.gethostname())))
+    print('Host name: '+ str(socket.gethostbyname('google.com')))
 
+    sys.exit(1)
     # Interpret the argument
     # python3 ringo.py S 100.0 john 90 90
     flag = sys.argv[1]  # Getting a flag i.e) S, F, R
