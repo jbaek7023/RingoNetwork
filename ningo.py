@@ -2,6 +2,10 @@
 #
 # a Ringo node using the Reliable Data Transfer protocol, using skeletal code based on
 # socket_echo_server_dgram.py and socket_echo_client_dgram.py from https://pymotw.com/3/socket/udp.html
+#
+# bestRing() is a slightly modified version of the function of a brute-force solution created by Simon Westphahl <westphahl@gmail.com>;
+# modifications made include renaming and converting to python3
+#
 
 import socket
 import socketserver
@@ -12,10 +16,13 @@ import time
 import json
 import timeit
 import ast
+import socket
 
 # Supporting addition, subtraction, multiplication and division.
 peers = {}
 rtt_matrix = {}
+routes = [] # for use in findRing()
+
 
 def usage():
     print ("Usage: python ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
@@ -112,8 +119,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 rtt_value = time.time() - json_obj['created']
                 if peers.get(str(self.client_address)):
                     peers[str(self.client_address)] = rtt_value
-                # print(peers)
-                print('Received!')
             else:
                 print('This should not happen')
         elif keyword =="send_rtt_vector":
@@ -181,16 +186,44 @@ def findrtt(server, peer_name, peer_port):
         )
 
 
+
+def findRing(node, cities, path, distance):
+    # Add way point
+    path.append(node)
+
+    # Calculate path length from current to last node
+    if len(path) > 1:
+        distance += cities[path[-2]][node]
+
+    # If path contains all cities and is not a dead end,
+    # add path from last to first city and return.
+    if (len(cities) == len(path)) and (path[0] in cities[path[-1]]):
+        global routes
+        path.append(path[0])
+        distance += cities[path[-2]][path[0]]
+        routes.append([distance, path])
+        return
+
+    # Fork paths for all possible cities not yet used
+    for city in cities:
+        if (city not in path) and (node in cities[city]):
+            findRing(city, dict(cities), list(path), distance)
+
 def main():
+
     if (len(sys.argv) != 6):
         usage()
 
+    # print('Host name: '+ str(socket.gethostbyname('google.com')))
+    #
+    # sys.exit(1)
     # Interpret the argument
     # python3 ringo.py S 100.0 john 90 90
     flag = sys.argv[1]  # Getting a flag i.e) S, F, R
     local_port = sys.argv[2]  # Getting a local port i.e) 23222
     poc_name = sys.argv[3]  # Getting the port name i.e) networklab3.cc.gatech.edu
     poc_port = sys.argv[4]  # Getting the port number i.e) 8080 or 13445
+    global num_of_ringos
     num_of_ringos = sys.argv[5]  # Getting the number of ringos i.e) 5
 
     # Define RTT Table
@@ -202,6 +235,8 @@ def main():
 
     # Peer Discover Here. #
     host = "127.0.0.1"
+    HOST = "127.0.0.1"
+    # host = socket.gethostbyname(socket.gethostname())
     HOST, PORT = host, int(local_port)
     server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
     server_thread = Thread(target=server.serve_forever, args=())
@@ -222,12 +257,11 @@ def main():
         peer_port = ast.literal_eval(item)[1]
         print(str(peer_address) + ":" + str(peer_port))
 
-    time.sleep(2)
+    time.sleep(1)
+
     # Find RTT.
     while True:
         if 1 not in peers.values():
-            print(peers.values())
-            print('Just printed Distance Vector')
             break
         else:
             for item in list(peers.keys()):
@@ -235,32 +269,52 @@ def main():
                 peer_port = ast.literal_eval(item)[1]
                 # Sending RTT to every peer at this time
                 findrtt(server, peer_address, peer_port)
-            time.sleep(1)
-
-    print("-------Printing Distance Vector of this Ringo--------")
+    time.sleep(1)
+    print("Finding Distance Vector of this Ringo...")
     # Adding our distance vector to our RTT matrix
     rtt_matrix[str((HOST, PORT))] = peers
-
-    print("RTT Table of this Ringo")
-
     while True:
         for item in list(peers.keys()):
             peer_address = ast.literal_eval(item)[0]
             peer_port = ast.literal_eval(item)[1]
             send_rtt_vector(server, peers, peer_address, peer_port)
         if len(rtt_matrix) == int(num_of_ringos):
-            print("done!")
+            print("Finishing Finding RTT Matrix..")
             break;
 
-    print(rtt_matrix)
-    print('----END OF RTT Table')
-    # Command Line Here
-    # for item in list(peers.keys()):
-    #     peer_address = ast.literal_eval(item)[0]
-    #     peer_port = ast.literal_eval(item)[1]
-    #     print(str(peer_address) + ":" + str(peer_port) + " - " + str(peers[item]))
+    # matrixKeys =
+    local = str((HOST,PORT))
+    findRing(local, rtt_matrix, [], 0)
+    routes.sort()
 
-    print('---------------------')
+    if len(routes) == 0:
+        print ("FAILED TO FIND OPTIMAL RING")
+
+    # Command Line User Interface Start here
+    print ("\n")
+
+    while True:
+        print('Enter Commands (show-matrix, show-ring or disconnect)')
+        text = input('> ')
+
+        if text == 'show-matrix':
+            print(json.dumps(rtt_matrix, indent=2, sort_keys=True))
+            # print(rtt_matrix)
+            print ("\n")
+
+        if text == 'show-ring':
+            print('The Total Cost: '+str(routes[0][0]))
+            print('The Optimal Ring path: '+str(routes[0][1]))
+            print ("\n")
+
+        if text == 'disconnect':
+            print('Goody-bye!')
+            print ("\n")
+            # server_thread.join()
+            server.server_close()
+            server.shutdown()
+            sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
