@@ -1,42 +1,51 @@
-####TO-DO
-1. Connect Sender - Receiver -> Working
-2. Forwarder Working
-3. Distance Vector
+# Overall
+This file contains the sets of instructions and the part of output.
 
-##(1)## Test Receiver and Sender
-# Create a Ringo Receiver (Server)
-python3 ringo.py R 23222 127.0.0.1 0 2
--> localhost:23222 / 0: poc port number / 2 is the size of the ringos
--> "running server"
+# Running two ringos on local machine
+python3 ringo.py R 8000 0 0 2
+python3 ringo.py F 9000 127.0.0.1 8000 2
 
-# Sender ( Client )
-python3 ringo.py S 23000 127.0.0.1 23222 2
--> ""
--(2)-> send distance vector (JSON)
+  jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py F 9020 127.0.0.1 8000 2
+  WELCOME TO RINGO
+  Peer Discovery Result
+  127.0.0.1:9020
+  127.0.0.1:8000
+  Finding Distance Vector of this Ringo...
+  Finishing Finding RTT Matrix..
 
-##(2)## Test Receiver and Sender and Forwarder
-# Create a Ringo Receiver (Server)
-python3 ringo.py R 23222 127.0.0.1 0 2
--> localhost:23222 / 0: poc port number / 2 is the size of the ringos
--> "running server"
+  Enter Commands (show-matrix, show-ring or disconnect)
+  > show-matrix
+  {
+    "('127.0.0.1', 8000)": {
+      "('127.0.0.1', 8000)": 0.0003681182861328125,
+      "('127.0.0.1', 9020)": 0.00024509429931640625
+    },
+    "('127.0.0.1', 9020)": {
+      "('127.0.0.1', 8000)": 0.0007402896881103516,
+      "('127.0.0.1', 9020)": 0.0010623931884765625
+    }
+  }
 
-# Sender ( Client )
-python3 ringo.py S 23000 127.0.0.1 23222 2
--> ""
--(2)-> send distance vector (JSON)
+  Enter Commands (show-matrix, show-ring or disconnect)
+  > show-ring
+  The Total Cost: 0.0009853839874267578
+  The Optimal Ring path: ["('127.0.0.1', 9020)", "('127.0.0.1', 8000)", "('127.0.0.1', 9020)"]
 
-# Forwarder does the same thing.
+  Enter Commands (show-matrix, show-ring or disconnect)
+  > disconnect
+  Goody-bye!
 
-###############
-100 -> 90 -> 30 (RECEIVER)
 
-python3 ningo.py R 8000 0 0 3
-=> (Once you start, show ringo list)
+  jaemin@jaemin-desktop:~/Desktop/RingoNetwork$
 
-python3 ningo.py F 9000 127.0.0.1 8000 3
-=>
+# Running five Ringos on local machine
+jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py R 8080 0 0 5
+jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 9003 127.0.0.1 8080 5
+jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 7020 127.0.0.1 8080 5
+jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 7000 127.0.0.1 7020 5
+jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py F 9020 127.0.0.1 7000 5
 
-python3 ningo.py S 9002 127.0.0.1 9000 3
-=>
+# Running two Ringos on network labs
 
-### make sure you use public IP (comment)
+
+# Running five Ringos on network labs
