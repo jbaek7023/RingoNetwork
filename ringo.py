@@ -16,9 +16,12 @@ import time
 import json
 import timeit
 import ast
-import socket
+# import socket
 
-# Supporting addition, subtraction, multiplication and division.
+PACKETS_WINDOW_SIZE = 10  # for sending, receiving packets
+GO_BACK_N = PACKETS_WINDOW_SIZE / 2  # if an ack is not received, go back a half window
+SEND_BUF = 1024 # size of msg send buffer
+
 peers = {}
 rtt_matrix = {}
 routes = [] # for use in findRing()
@@ -135,10 +138,50 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             })
             if ttl > 0:
                 socketo.sendto(new_rtt_peer_data.encode('utf-8'), self.client_address)
+        elif keyword == "file_name":
+            data = json_obj['file_name']
+            print ("Received File:" + data)
+            
+            file = open(data, 'wb')
+
+            new_msg_data = json.dumps({
+                'command': 'file_name_ack',
+            })
+
+            socketo.sendto(new_msg_data.encode('utf-8'), self.client_address)
+
+        elif keyword == "file_name_ack":
+            print("received file_name_ack from " + str(self.client_address))
+            # 
+            # data,addr = s.recvfrom(buf)
+
         else:
             print(keyword)
             print('Invalid Packet')
 
+def send_msg(server, poc_name, poc_port, file_name):
+    print("I want to send your message!")
+    poc_address = (poc_name, int(poc_port))
+
+    peer_data = json.dumps({
+        'command': 'file_name',
+        'peers' : peers,
+        'file_name': file_name
+        })
+
+    server.socket.sendto(
+        peer_data.encode('utf-8'),
+        poc_address
+        )
+
+    # f = open(file_name,'rb')
+    # data = f.read(SEND_BUF)
+    # while(data):
+    #     if(s.sendto(data,addr)):
+    #         print('sent:\t' + data.decode())
+    #         data = f.read(SEND_BUF)
+    # # s.close()
+    # f.close()
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
     # We're sending RTT when it's the first one.
@@ -305,7 +348,7 @@ def main():
         if text == 'show-ring':
             print('The Total Cost: '+str(routes[0][0]))
             print('The Optimal Ring path: '+str(routes[0][1]))
-            print ("\n")
+            print("\n")
 
         if text == 'disconnect':
             print('Goody-bye!')
@@ -314,6 +357,14 @@ def main():
             server.server_close()
             server.shutdown()
             sys.exit(1)
+
+        if text.split()[0] == 'send':
+            if (flag != 'S'):
+                print('Illegal Request!')
+                print('Only Senders may make send requests')
+            else:
+                print(text.split()[1])
+                send_msg(server, peer_address, peer_port, text.split()[1])
 
 
 if __name__ == "__main__":
