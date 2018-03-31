@@ -18,13 +18,16 @@ import timeit
 import ast
 # import socket
 
-PACKETS_WINDOW_SIZE = 5  # if an ack is not received, go back a full window
+PACKETS_WINDOW_SIZE = 10  # this many packets may be designated by number
+GO_BACK_N = PACKETS_WINDOW_SIZE / 2 # this many packets may remain unacknowledged
 SEND_BUF = 1024 # size of msg send buffer
 
 peers = {}
 rtt_matrix = {}
 routes = [] # for use in findRing()
 expected_packet = 0 # for use with receiving messages
+expected_packet_ack = 0
+proceed = True # for use with GBN protocol
 
 
 def usage():
@@ -168,7 +171,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 new_msg_data = json.dumps({
                     'command': 'message',
                     'file_name': file_name,
-                    'packet_number': packet_number,
+                    'packet_number': (packet_number % PACKETS_WINDOW_SIZE),
                     'message': str(data),
                     })
                 if(socketo.sendto(new_msg_data.encode('utf-8'),self.client_address)):
@@ -183,11 +186,41 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             packet_number = json_obj['packet_number']
 
             print("packet number:\t" + str(packet_number))
+            global expected_packet
+            global expected_packet_ack
+            if packet_number != (expected_packet % PACKETS_WINDOW_SIZE):
+                print("RECEIVED UNEXPECTED PACKET")
+            else:
+                expected_packet += 1
 
-            file = open(file_name, 'a')
+                file = open(file_name, 'a')
 
-            file.write(message_data)
+                file.write(message_data)
+
+                new_msg_data = json.dumps({
+                    'command': 'message_ack',
+                    # 'file_name': file_name,
+                    'packet_number': packet_number, # already modded by window size
+                    })
+                socketo.sendto(new_msg_data.encode('utf-8'),self.client_address)
             # s.settimeout(2)
+
+        elif keyword == "message_ack":
+            print("received message ack from " + str(self.client_address))
+            packet_number = json_obj['packet_number']
+
+            print ("ack number:\t" + str(packet_number))
+            global proceed
+
+            if packet_number != (expected_packet_ack % PACKETS_WINDOW_SIZE):
+                print("UNEXPECTED ACK")
+
+            else:
+                expected_packet_ack += 1
+
+
+
+
 
         else:
             print(keyword)
