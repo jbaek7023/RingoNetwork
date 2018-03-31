@@ -159,7 +159,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             file_name = json_obj['file_name']
             packet_number = 0
 
-            f = open(file_name,'rb')
+            f = open(file_name,'r')
             data = f.read(SEND_BUF)
 
             print("data:" + str(data))
@@ -167,6 +167,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             while(data):
                 new_msg_data = json.dumps({
                     'command': 'message',
+                    'file_name': file_name,
                     'packet_number': packet_number,
                     'message': str(data),
                     })
@@ -177,10 +178,16 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
         elif keyword == "message":
             print("received message data from " + str(self.client_address))
+            file_name = json_obj['file_name']
             message_data = json_obj['message']
             packet_number = json_obj['packet_number']
 
             print("packet number:\t" + str(packet_number))
+
+            file = open(file_name, 'a')
+
+            file.write(message_data)
+            # s.settimeout(2)
 
         else:
             print(keyword)
