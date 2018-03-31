@@ -24,6 +24,7 @@ SEND_BUF = 1024 # size of msg send buffer
 peers = {}
 rtt_matrix = {}
 routes = [] # for use in findRing()
+expected_packet = 0 # for use with receiving messages
 
 
 def usage():
@@ -160,17 +161,26 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
             f = open(file_name,'rb')
             data = f.read(SEND_BUF)
+
+            print("data:" + str(data))
             
             while(data):
                 new_msg_data = json.dumps({
                     'command': 'message',
-                    'packet_number': packet_number
-                    'message': data,
+                    'packet_number': packet_number,
+                    'message': str(data),
                     })
                 if(socketo.sendto(new_msg_data.encode('utf-8'),self.client_address)):
                     print('sent packet number:\t' + str(packet_number))
                     packet_number += 1
                     data = f.read(SEND_BUF)
+
+        elif keyword == "message":
+            print("received message data from " + str(self.client_address))
+            message_data = json_obj['message']
+            packet_number = json_obj['packet_number']
+
+            print("packet number:\t" + str(packet_number))
 
         else:
             print(keyword)
@@ -197,7 +207,7 @@ def send_filename(server, poc_name, poc_port, file_name):
 """
 sends packets with a gbn window of size PACKETS_WINDOW_SIZE 
 """
-def send_msg(server, poc_name, poc_port):
+# def send_msg(server, poc_name, poc_port):
 
 
     # f = open(file_name,'rb')
@@ -390,7 +400,7 @@ def main():
                 print('Only Senders may make send requests')
             else:
                 print(text.split()[1])
-                send_msg(server, peer_address, peer_port, text.split()[1])
+                send_filename(server, peer_address, peer_port, text.split()[1])
 
 
 if __name__ == "__main__":
