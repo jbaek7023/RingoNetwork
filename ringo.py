@@ -483,7 +483,19 @@ def main():
                 print('Only Senders may make send requests')
             else:
                 print(text.split()[1])
-                send_filename(server, peer_address, peer_port, text.split()[1])
+                file_name = text.split()[1]
+                f = open(file_name, 'r')
+                data = f.read(SEND_BUF)
+
+                while f.read(SEND_BUF):
+                    window.append(data)
+                    data = f.read(SEND_BUF)
+
+                    print("DATA:\t" + data)
+
+                f.close()
+
+                # send_filename(server, peer_address, peer_port, text.split()[1])
 
 
 if __name__ == "__main__":
