@@ -18,8 +18,7 @@ import timeit
 import ast
 # import socket
 
-PACKETS_WINDOW_SIZE = 10  # for sending, receiving packets
-GO_BACK_N = PACKETS_WINDOW_SIZE / 2  # if an ack is not received, go back a half window
+PACKETS_WINDOW_SIZE = 5  # if an ack is not received, go back a full window
 SEND_BUF = 1024 # size of msg send buffer
 
 peers = {}
@@ -139,27 +138,49 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             if ttl > 0:
                 socketo.sendto(new_rtt_peer_data.encode('utf-8'), self.client_address)
         elif keyword == "file_name":
-            data = json_obj['file_name']
-            print ("Received File:" + data)
+            file_name = json_obj['file_name']
+            print ("Received File Name:" + file_name)
             
-            file = open(data, 'wb')
+            file = open(file_name, 'wb')
 
             new_msg_data = json.dumps({
                 'command': 'file_name_ack',
+                'file_name': file_name
             })
 
+            print("sending file_name_ack")
             socketo.sendto(new_msg_data.encode('utf-8'), self.client_address)
 
         elif keyword == "file_name_ack":
             print("received file_name_ack from " + str(self.client_address))
-            # 
-            # data,addr = s.recvfrom(buf)
+            print("sending message...")
+
+            file_name = json_obj['file_name']
+            packet_number = 0
+
+            f = open(file_name,'rb')
+            data = f.read(SEND_BUF)
+            
+            while(data):
+                new_msg_data = json.dumps({
+                    'command': 'message',
+                    'packet_number': packet_number
+                    'message': data,
+                    })
+                if(socketo.sendto(new_msg_data.encode('utf-8'),self.client_address)):
+                    print('sent packet number:\t' + str(packet_number))
+                    packet_number += 1
+                    data = f.read(SEND_BUF)
 
         else:
             print(keyword)
             print('Invalid Packet')
 
-def send_msg(server, poc_name, poc_port, file_name):
+
+"""
+Sends message to a partircular ringo; sends filename first, awaits ack
+"""
+def send_filename(server, poc_name, poc_port, file_name):
     print("I want to send your message!")
     poc_address = (poc_name, int(poc_port))
 
@@ -173,6 +194,11 @@ def send_msg(server, poc_name, poc_port, file_name):
         peer_data.encode('utf-8'),
         poc_address
         )
+"""
+sends packets with a gbn window of size PACKETS_WINDOW_SIZE 
+"""
+def send_msg(server, poc_name, poc_port):
+
 
     # f = open(file_name,'rb')
     # data = f.read(SEND_BUF)
