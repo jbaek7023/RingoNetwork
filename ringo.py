@@ -298,11 +298,15 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             global pack_sequence
 
             if ack_number != expected_packet_ack:
+                print('UNEXPECTED ACK RECEIVED')
                 send_window(socketo)
             else:
                 expected_packet_ack += 1
 
+                print("deleting from window...")
+
                 del window[0]
+                print(str(len(window)))
 
                 print("FILE SEQUENCE NUMBER:\t" + str(pack_sequence))
                 new_pckt = json.dumps({
@@ -310,10 +314,17 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                         'seq_number': pack_sequence,
                         'data': file_text[pack_sequence]
                         })
-                
-                pack_sequence += 1
+                print('adding to window...')                
 
                 window.append(new_pckt)
+                print(str(len(window)))
+
+                pack_sequence += 1
+
+                socketo.sendto(
+                    new_pckt.encode('utf-8'),
+                    self.client_address
+                    )
 
 
         else:
