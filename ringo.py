@@ -34,6 +34,8 @@ window = [] # packet window
 # base = 0    # base of packet window
 file_text = [] # body of file to send
 
+been_tested = False # for testing unexpected acks
+
 
 def usage():
     print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
@@ -296,6 +298,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
             global expected_packet_ack
             global pack_sequence
+            global been_tested
 
             if ack_number != expected_packet_ack:
                 print('UNEXPECTED ACK RECEIVED')
@@ -309,22 +312,39 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 print(str(len(window)))
 
                 print("FILE SEQUENCE NUMBER:\t" + str(pack_sequence))
-                new_pckt = json.dumps({
-                        'command': 'file',
-                        'seq_number': pack_sequence,
-                        'data': file_text[pack_sequence]
-                        })
-                print('adding to window...')                
 
-                window.append(new_pckt)
-                print(str(len(window)))
 
-                pack_sequence += 1
 
-                socketo.sendto(
-                    new_pckt.encode('utf-8'),
-                    self.client_address
-                    )
+                if pack_sequence < len(file_text):
+
+                    # DELETE THIS BLOCK AFTER TESTING!!!
+                    # TESTING GBN FOR UNEXPECTED ACK
+                    if pack_sequence == 14 and been_tested == False:
+                        new_pckt = json.dumps({
+                            'command': 'file',
+                            'seq_number': 11,
+                            'data': file_text[pack_sequence]
+                            })
+
+                        been_tested = True
+
+                    else:
+                        new_pckt = json.dumps({
+                                'command': 'file',
+                                'seq_number': pack_sequence,
+                                'data': file_text[pack_sequence]
+                                })
+                    print('adding to window...')                
+                    print(str(len(window)))
+
+                    window.append(new_pckt)
+
+                    pack_sequence += 1
+
+                    socketo.sendto(
+                        new_pckt.encode('utf-8'),
+                        self.client_address
+                        )
 
 
         else:
@@ -629,7 +649,8 @@ def main():
                     # print("DATA:\t" + data)
 
                 f.close()
-
+                # print(len(file_text))
+                # sys.exit(1)
                 init_window(server, peer_address, peer_port)
 
 
