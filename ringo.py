@@ -276,13 +276,28 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             print("seq numb\t" + str(seq_number))
 
             global expected_packet
+            global been_tested
 
             if seq_number != expected_packet:
                 print("UNEXPECTED PACKET RECEIVED")
             else:
                 print("received packet number\t" + str(seq_number))
                 expected_packet += 1
+
+                # DELETE THIS BLOCK AFTER TESTING!!!
+                    # TESTING GBN FOR UNEXPECTED ACK
+
                 
+                # if pack_sequence == 14 and been_tested == False:
+                #     pckt_ack = json.dumps({
+                #             'command': 'file_ack',
+                #             'ack_number': 11,
+                #             'data': data
+                #             })
+
+                #     been_tested = True
+
+                # else:
                 pckt_ack = json.dumps({
                         'command': 'file_ack',
                         'ack_number': seq_number,
@@ -298,12 +313,12 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
             global expected_packet_ack
             global pack_sequence
-            global been_tested
 
             if ack_number != expected_packet_ack:
                 print('UNEXPECTED ACK RECEIVED')
                 send_window(socketo)
             else:
+                
                 expected_packet_ack += 1
 
                 print("deleting from window...")
@@ -316,24 +331,12 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
 
                 if pack_sequence < len(file_text):
-
-                    # DELETE THIS BLOCK AFTER TESTING!!!
-                    # TESTING GBN FOR UNEXPECTED ACK
-                    if pack_sequence == 14 and been_tested == False:
-                        new_pckt = json.dumps({
+                    
+                    new_pckt = json.dumps({
                             'command': 'file',
-                            'seq_number': 11,
+                            'seq_number': pack_sequence,
                             'data': file_text[pack_sequence]
                             })
-
-                        been_tested = True
-
-                    else:
-                        new_pckt = json.dumps({
-                                'command': 'file',
-                                'seq_number': pack_sequence,
-                                'data': file_text[pack_sequence]
-                                })
                     print('adding to window...')                
                     print(str(len(window)))
 
