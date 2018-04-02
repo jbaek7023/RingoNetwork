@@ -276,7 +276,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             print("seq numb\t" + str(seq_number))
 
             global expected_packet
-            global been_tested
+            # global been_tested
 
             if seq_number != expected_packet:
                 print("UNEXPECTED PACKET RECEIVED")
@@ -285,24 +285,25 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 expected_packet += 1
 
                 # DELETE THIS BLOCK AFTER TESTING!!!
-                    # TESTING GBN FOR UNEXPECTED ACK
+                # TESTING GBN FOR UNEXPECTED ACK
 
+                global been_tested
                 
-                # if pack_sequence == 14 and been_tested == False:
-                #     pckt_ack = json.dumps({
-                #             'command': 'file_ack',
-                #             'ack_number': 11,
-                #             'data': data
-                #             })
+                if seq_number == 11 and been_tested == False:
+                    pckt_ack = json.dumps({
+                            'command': 'file_ack',
+                            'ack_number': 3,
+                            'data': data
+                            })
 
-                #     been_tested = True
+                    been_tested = True
 
-                # else:
-                pckt_ack = json.dumps({
-                        'command': 'file_ack',
-                        'ack_number': seq_number,
-                        'data': data,
-                        })
+                else:
+                    pckt_ack = json.dumps({
+                            'command': 'file_ack',
+                            'ack_number': seq_number,
+                            'data': data,
+                            })
 
                 socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
 
@@ -316,7 +317,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
             if ack_number != expected_packet_ack:
                 print('UNEXPECTED ACK RECEIVED')
-                send_window(socketo)
+                send_window(socketo, self.client_address)
             else:
                 
                 expected_packet_ack += 1
@@ -396,7 +397,7 @@ def init_window(server, poc_name, poc_port):
 '''
 send window of packets
 '''
-def send_window(sock_server):
+def send_window(sock_server, client_address):
     print("I'm going to send your packets!")
 
     # poc_address = (poc_name, int(poc_port)) 
@@ -405,7 +406,7 @@ def send_window(sock_server):
         print("sending packet\t" + str(json_pckt['seq_number']))
         sock_server.sendto(
             packet.encode('utf-8'),
-            self.client_address
+            client_address
             )
 
 
