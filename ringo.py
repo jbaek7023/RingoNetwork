@@ -277,7 +277,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             filename = json_obj['filename']
             print("seq numb\t" + str(seq_number))
 
-            
+            f = open('newText.txt', 'a')
 
             # global expected_packet
             # global been_tested
@@ -320,7 +320,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             global expected_packet
             global been_tested
 
-            if seq_number == 11 and been_tested == False:
+            if seq_number == 28 and been_tested == False:
                 pckt_ack = json.dumps({
                         'command': 'file_ack',
                         'ack_number': 3,
@@ -337,8 +337,13 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                                 })
 
                 if seq_number == expected_packet:
-                    with open(filename, 'a+') as f:
-                        f.write(data)
+                    # print("writing data")
+                    # print(data)
+                    # with open(filename, 'a+') as f:
+                    #     f.write(data)
+                    f.write(data)
+
+                expected_packet += 1
 
 
             socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
@@ -656,6 +661,10 @@ def main():
     # Command Line User Interface Start here
     print ("\n")
 
+    # very hacky way to write data to file: open here, append later
+    if flag == "R":
+        f = open('newText.txt', 'w')
+
     while True:
         print('Enter Commands (show-matrix, show-ring or disconnect)')
         text = input('> ')
@@ -686,19 +695,29 @@ def main():
                 print("FILENAME:\t" + text.split()[1])
                 file_name = text.split()[1]
                 f = open(file_name, 'r')
-                data = f.read(SEND_BUF)
+                data = f.read()
 
-                while f.read(SEND_BUF):
-                    file_text.append(data)
-                    data = f.read(SEND_BUF)
+                # while f.read(SEND_BUF):
+                #     file_text.append(data)
+                #     data = f.read(SEND_BUF)
 
                     # print("DATA:\t" + data)
+                idx = 0
+                while (idx + SEND_BUF) < len(data):
+                    file_text.append(data[idx:idx+SEND_BUF])
+                    idx += SEND_BUF
+                file_text.append(data[idx:])
 
-                print(file_text[0])
-                print()
-                print()
-                print()
-                print(file_text[1])
+                # print(file_text[0])
+                # print()
+                # print()
+                # print()
+                # print(file_text[1])
+                # print()
+                # print()
+                # print()
+                # print(file_text[2])
+                # print(len(file_text))
 
                 f.close()
                 # print(len(file_text))
