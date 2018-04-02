@@ -101,6 +101,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
         json_obj = json.loads(data.decode("utf-8"))
         keyword = json_obj.get('command')
         peers_response = json_obj.get('peers')
+        # filename = json_obj.get('filename')
 
         if keyword == "peer_discovery":
             peers[str(self.client_address)] = 1  # Add to the Peer List
@@ -273,52 +274,91 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             print("received message data from " + str(self.client_address))
             data = json_obj['data']
             seq_number = json_obj['seq_number']
+            filename = json_obj['filename']
             print("seq numb\t" + str(seq_number))
 
-            global expected_packet
+            
+
+            # global expected_packet
             # global been_tested
 
-            if seq_number != expected_packet:
-                print("UNEXPECTED PACKET RECEIVED")
-            else:
-                print("received packet number\t" + str(seq_number))
-                expected_packet += 1
+            # if seq_number != expected_packet:
+            #     print("UNEXPECTED PACKET RECEIVED")
 
-                # DELETE THIS BLOCK AFTER TESTING!!!
-                # TESTING GBN FOR UNEXPECTED ACK
+            #     # send this unexpected ack to sender 
+            #     # can possibly remove once timeout implemented
+            #     pckt_ack = json.dumps({
+            #                 'command': 'file_ack',
+            #                 'ack_number': seq_number,
+            #                 'data': data,
+            #                 })
+            # else:
+            #     print("received packet number\t" + str(seq_number))
+            #     expected_packet += 1
 
-                global been_tested
+            #     # DELETE THIS BLOCK AFTER TESTING!!!
+            #     # TESTING GBN FOR UNEXPECTED ACK
+
+            #     global been_tested
                 
-                if seq_number == 11 and been_tested == False:
-                    pckt_ack = json.dumps({
-                            'command': 'file_ack',
-                            'ack_number': 3,
-                            'data': data
-                            })
+            #     if seq_number == 11 and been_tested == False:
+            #         pckt_ack = json.dumps({
+            #                 'command': 'file_ack',
+            #                 'ack_number': 3,
+            #                 'data': data
+            #                 })
 
-                    been_tested = True
+            #         been_tested = True
 
-                else:
-                    pckt_ack = json.dumps({
-                            'command': 'file_ack',
-                            'ack_number': seq_number,
-                            'data': data,
-                            })
+            #     else:
+            #         pckt_ack = json.dumps({
+            #                 'command': 'file_ack',
+            #                 'ack_number': seq_number,
+            #                 'data': data,
+            #                 })
 
-                socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
+            global expected_packet
+            global been_tested
+
+            if seq_number == 11 and been_tested == False:
+                pckt_ack = json.dumps({
+                        'command': 'file_ack',
+                        'ack_number': 3,
+                        'filename' : filename,
+                        'data': data
+                        })
+                been_tested = True
+            else:
+                pckt_ack = json.dumps({
+                                'command': 'file_ack',
+                                'ack_number': seq_number,
+                                'filename' : filename,
+                                'data': data,
+                                })
+
+                if seq_number == expected_packet:
+                    with open(filename, 'a+') as f:
+                        f.write(data)
+
+
+            socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
 
         elif keyword == "file_ack":
             data = json_obj['data']
             ack_number = json_obj['ack_number']
+            filename = json_obj['filename']
+            print("expected ack\t" + str(expected_packet_ack))
             print("ack numb received\t" + str(ack_number))
 
-            global expected_packet_ack
+            
             global pack_sequence
 
             if ack_number != expected_packet_ack:
                 print('UNEXPECTED ACK RECEIVED')
                 send_window(socketo, self.client_address)
             else:
+
+                global expected_packet_ack
                 
                 expected_packet_ack += 1
 
@@ -335,6 +375,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     
                     new_pckt = json.dumps({
                             'command': 'file',
+                            'filename': filename,
                             'seq_number': pack_sequence,
                             'data': file_text[pack_sequence]
                             })
@@ -376,7 +417,7 @@ Sends message to a partircular ringo; sends filename first, awaits ack
 """
 initialize packet window
 """
-def init_window(server, poc_name, poc_port):
+def init_window(server, poc_name, poc_port, filename):
     print("I want to send your message!")
 
     global pack_sequence
@@ -385,6 +426,7 @@ def init_window(server, poc_name, poc_port):
     while idx < len(file_text) and idx < PACKETS_WINDOW_SIZE:
         window.append(json.dumps({
             'command': 'file',
+            'filename': filename,
             'seq_number': pack_sequence,
             'data': file_text[expected_packet_ack+idx]
             }))
@@ -652,10 +694,16 @@ def main():
 
                     # print("DATA:\t" + data)
 
+                print(file_text[0])
+                print()
+                print()
+                print()
+                print(file_text[1])
+
                 f.close()
                 # print(len(file_text))
                 # sys.exit(1)
-                init_window(server, peer_address, peer_port)
+                init_window(server, peer_address, peer_port, file_name)
 
 
 if __name__ == "__main__":
