@@ -10,7 +10,7 @@
 import socket
 import socketserver
 import sys
-from threading import Thread
+from threading import Thread, Event
 from datetime import datetime
 import time
 import json
@@ -148,127 +148,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 'ttl': ttl
             })
             if ttl > 0:
-                socketo.sendto(new_rtt_peer_data.encode('utf-8'), self.client_address)
-
-        # elif keyword == "file_name":
-        #     file_name = json_obj['file_name']
-        #     print ("Received File Name:" + file_name)
-            
-        #     file = open(file_name, 'wb')
-
-        #     new_msg_data = json.dumps({
-        #         'command': 'file_name_ack',
-        #         'file_name': file_name
-        #     })
-
-        #     print("sending file_name_ack")
-        #     socketo.sendto(new_msg_data.encode('utf-8'), self.client_address)
-
-        # elif keyword == "file_name_ack":
-        #     print("received file_name_ack from " + str(self.client_address))
-        #     print("sending message...")
-
-        #     file_name = json_obj['file_name']
-        #     packet_number = 0
-
-        #     global f 
-        #     f = open(file_name,'r')
-        #     data = f.read(SEND_BUF)
-
-        #     print("data:" + str(data))
-
-        #     global expected_packet_ack
-        #     global window
-
-        #     # initialize window
-
-        #     while data and len(window) < PACKETS_WINDOW_SIZE:
-        #         new_pckt = json.dumps({
-        #             'command': 'message',
-        #             'file_name': file_name,
-        #             'packet_number': (packet_number),
-        #             'message': str(data),
-        #             })
-
-        #         window.append(new_pckt)
-        #         if packet_number < (expected_packet_ack + PACKETS_WINDOW_SIZE):
-        #             if(socketo.sendto(new_pckt.encode('utf-8'),self.client_address)):
-        #                 print('sent packet number:\t' + str(packet_number))
-        #                 packet_number += 1
-        #                 data = f.read(SEND_BUF)
-
-        # elif keyword == "message":
-        #     print("received message data from " + str(self.client_address))
-        #     file_name = json_obj['file_name']
-        #     message_data = json_obj['message']
-        #     packet_number = json_obj['packet_number']
-
-        #     print("packet number:\t" + str(packet_number))
-        #     global expected_packet
-        #     global expected_packet_ack
-        #     ack_number = 0
-        #     if packet_number != (expected_packet):
-        #         print("RECEIVED UNEXPECTED PACKET")
-        #         ack_number = expected_packet - 1
-        #     else:
-        #         expected_packet += 1
-        #         ack_number = packet_number
-
-        #         file = open(file_name, 'a')
-
-        #         file.write(message_data)
-
-        #     new_msg_data = json.dumps({
-        #         'command': 'message_ack',
-        #         'packet_number': ack_number, # already modded by window size
-        #         })
-        #     socketo.sendto(new_msg_data.encode('utf-8'),self.client_address)
-        #     # s.settimeout(2)
-
-        # elif keyword == "message_ack":
-        #     print("received message ack from " + str(self.client_address))
-        #     packet_number = json_obj['packet_number']
-        #     file_name = json_obj['file_name']
-
-        #     print ("ack number:\t" + str(packet_number))
-
-        #     global packet_number
-        #     global window
-        #     global expected_packet_ack
-        #     global f
-
-        #     if packet_number != (expected_packet_ack):
-        #         print("UNEXPECTED ACK")
-        #         # keep window as is
-        #         for i in window:
-        #             if(socketo.sendto(window[i].encode('utf-8'),self.client_address)):
-        #                 print('sent packet number:\t' + str(window[i][packet_number]))
-
-
-        #     else:
-        #         expected_packet_ack += 1
-        #         del window[0]
-
-                
-        #         data = f.read(SEND_BUF)
-
-        #         if data:
-        #             new_pckt = json.dumps({
-        #                 'command': 'message',
-        #                 'file_name': file_name,
-        #                 'packet_number': (packet_number),
-        #                 'message': str(data),
-        #                 })
-
-        #             window.append(new_pckt)
-        #             if packet_number < (expected_packet_ack + PACKETS_WINDOW_SIZE):
-        #                 if(socketo.sendto(new_pckt.encode('utf-8'),self.client_address)):
-        #                     print('sent packet number:\t' + str(packet_number))
-        #                     packet_number += 1
-        #                     data = f.read(SEND_BUF)
-
-        #         else:
-        #             f.close()            
+                socketo.sendto(new_rtt_peer_data.encode('utf-8'), self.client_address)           
 
         elif keyword == "file":
             print("received message data from " + str(self.client_address))
@@ -278,44 +158,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             print("seq numb\t" + str(seq_number))
 
             f = open('newText.txt', 'a')
-
-            # global expected_packet
-            # global been_tested
-
-            # if seq_number != expected_packet:
-            #     print("UNEXPECTED PACKET RECEIVED")
-
-            #     # send this unexpected ack to sender 
-            #     # can possibly remove once timeout implemented
-            #     pckt_ack = json.dumps({
-            #                 'command': 'file_ack',
-            #                 'ack_number': seq_number,
-            #                 'data': data,
-            #                 })
-            # else:
-            #     print("received packet number\t" + str(seq_number))
-            #     expected_packet += 1
-
-            #     # DELETE THIS BLOCK AFTER TESTING!!!
-            #     # TESTING GBN FOR UNEXPECTED ACK
-
-            #     global been_tested
-                
-            #     if seq_number == 11 and been_tested == False:
-            #         pckt_ack = json.dumps({
-            #                 'command': 'file_ack',
-            #                 'ack_number': 3,
-            #                 'data': data
-            #                 })
-
-            #         been_tested = True
-
-            #     else:
-            #         pckt_ack = json.dumps({
-            #                 'command': 'file_ack',
-            #                 'ack_number': seq_number,
-            #                 'data': data,
-            #                 })
 
             global expected_packet
             global been_tested
@@ -337,14 +179,9 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                                 })
 
                 if seq_number == expected_packet:
-                    # print("writing data")
-                    # print(data)
-                    # with open(filename, 'a+') as f:
-                    #     f.write(data)
                     f.write(data)
 
                 expected_packet += 1
-
 
             socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
 
@@ -374,8 +211,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                 print("FILE SEQUENCE NUMBER:\t" + str(pack_sequence))
 
-
-
                 if pack_sequence < len(file_text):
                     
                     new_pckt = json.dumps({
@@ -396,29 +231,16 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                         self.client_address
                         )
 
+                time.sleep(5)
+                print("CURRENT EXPECTED PACK_ACK:\t"+str(expected_packet_ack))
+
+
 
         else:
             print(keyword)
             print('Invalid Packet')
 
 
-"""
-Sends message to a partircular ringo; sends filename first, awaits ack
-"""
-# def send_filename(server, poc_name, poc_port, file_name):
-#     print("I want to send your message!")
-#     poc_address = (poc_name, int(poc_port))
-
-#     peer_data = json.dumps({
-#         'command': 'file_name',
-#         'peers' : peers,
-#         'file_name': file_name
-#         })
-
-#     server.socket.sendto(
-#         peer_data.encode('utf-8'),
-#         poc_address
-#         )
 """
 initialize packet window
 """
@@ -457,15 +279,6 @@ def send_window(sock_server, client_address):
             )
 
 
-    # idx = 0
-    # while window[idx] and idx < PACKETS_WINDOW_SIZE:
-    #     print("sending packet\t" + str(window[idx][seq_number]))
-    #     sock_server.sendto(
-    #         window[idx].encode('utf-8'),
-    #         self.client_address
-    #         )
-    #     idx += 1
-
 '''
 send window of packets
 '''
@@ -485,28 +298,6 @@ def send_first_window(server, poc_name, poc_port):
             packet.encode('utf-8'),
             poc_address
             )
-
-    # idx = 0
-    # while window[idx] and idx < PACKETS_WINDOW_SIZE:
-    #     print("sending packet\t" + str(window[idx][seq_number]))
-    #     server.socket.sendto(
-    #         window[idx].encode('utf-8'),
-    #         poc_address
-    #         )
-    #     idx += 1
-
-
-# def send_msg(server, poc_name, poc_port):
-
-
-    # f = open(file_name,'rb')
-    # data = f.read(SEND_BUF)
-    # while(data):
-    #     if(s.sendto(data,addr)):
-    #         print('sent:\t' + data.decode())
-    #         data = f.read(SEND_BUF)
-    # # s.close()
-    # f.close()
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
     # We're sending RTT when it's the first one.
@@ -577,7 +368,52 @@ def findRing(node, cities, path, distance):
         if (city not in path) and (node in cities[city]):
             findRing(city, dict(cities), list(path), distance)
 
+
+'''
+Timeout function borrowed from 
+https://dreamix.eu/blog/webothers/timeout-function-in-python-3
+''' 
+# Event object used to send signals from one thread to another
+stop_event = Event()
+ 
+ 
+def do_actions(idx):
+    """
+    Function that should timeout after 5 seconds. It simply prints a number and waits 1 second.
+    :return:
+    """
+    i = 0
+    while True:
+        i += 1
+        # print(i)
+        time.sleep(1)
+ 
+        # Here we make the check if the other thread sent a signal to stop execution.
+        if stop_event.is_set():
+            break
+    print("time for " + str(idx) + " ran out")
+    
+
 def main():
+
+    # We create another Thread
+    action_thread = Thread(target=do_actions, args=(2,))
+ 
+    # Here we start the thread and we wait 5 seconds before the code continues to execute.
+    action_thread.start()
+    action_thread.join(timeout=5)
+ 
+    # We send a signal that the other thread should stop.
+    stop_event.set()
+ 
+    idx = 0
+    if (expected_packet_ack != idx):
+        print("not ok")
+    else:
+        print("ok")
+    print("Hey there! I timed out! You can do things after me!")
+
+    sys.exit(1)
 
     if (len(sys.argv) != 6):
         usage()
@@ -697,27 +533,11 @@ def main():
                 f = open(file_name, 'r')
                 data = f.read()
 
-                # while f.read(SEND_BUF):
-                #     file_text.append(data)
-                #     data = f.read(SEND_BUF)
-
-                    # print("DATA:\t" + data)
                 idx = 0
                 while (idx + SEND_BUF) < len(data):
                     file_text.append(data[idx:idx+SEND_BUF])
                     idx += SEND_BUF
                 file_text.append(data[idx:])
-
-                # print(file_text[0])
-                # print()
-                # print()
-                # print()
-                # print(file_text[1])
-                # print()
-                # print()
-                # print()
-                # print(file_text[2])
-                # print(len(file_text))
 
                 f.close()
                 # print(len(file_text))
