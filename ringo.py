@@ -27,7 +27,7 @@ rtt_matrix = {}
 routes = [] # for use in findRing()
 
 pack_sequence = 0 # current sequence number
-expected_packet = 0 # for use with receiving messages
+expected_packet = 0 # for use with receiving message
 expected_packet_ack = 0
 proceed = True # for use with GBN protocol
 window = [] # packet window
@@ -61,38 +61,6 @@ def check_numeric(val, arg):
     except ValueError:
         print(arg + " must be an int")
         sys.exit(1)
-
-
-# Peer Forwarder
-# def forward(local_port, poc_name, poc_port, num_of_ringos):
-#     print('Forwarder')
-#     # Forwarder Peer Discovery
-#
-#
-# # Not YET
-# def handle_incoming_data(data, peer_ip, peer_port):
-#     json_obj = json.loads(data)
-#     keyword = json_obj['command']
-#     # print(keyword)
-#
-# def receive(local_port, poc_name, poc_port, num_of_ringos):
-#     host = "127.0.0.1"
-#     # AF_INET: Internet Iv4
-#     # SOCK_DGRAM: UDP Protocol
-#     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#     # server_socket.bind((host, int(local_port)))
-#
-#     while True:
-#         data, addr = server_socket.recvfrom(1024)
-#         data = data.decode('utf-8')
-#         client_thread = Thread(target=handle_incoming_data, args=(data, addr[0], addr[1]))
-#         client_thread.start()
-#
-#         print('message from user: ' + str(addr))
-#         print('from connected user: ' + data)
-#
-#     # Close the Socket
-#     server_socket.close()
 
 
 class MyUDPHandler(socketserver.BaseRequestHandler):
@@ -272,7 +240,7 @@ def init_window(server, poc_name, poc_port, filename):
             })
         window.append(new_pckt)
 
-        threads.append(Thread(target=ackTimeout, args=(server.socket, poc_address, pack_sequence, new_pckt,)))
+        threads.append(Thread(target=ackTimeout, args=(server, poc_address, pack_sequence, new_pckt,)))
         stop_events.append(Event())
 
         pack_sequence += 1
@@ -290,7 +258,7 @@ def send_window(sock_server, client_address):
 
     print(sock_server)
 
-    print(server_name)
+    # print(server_name)
 
     print(len(window))
     # poc_address = (poc_name, int(poc_port)) 
@@ -316,34 +284,6 @@ def send_window(sock_server, client_address):
         threads[idx].join(timeout=5)
         stop_events[idx].set()
 
-
-'''
-send window of packets
-'''
-# def send_first_window(server, poc_address):
-#     print("I'm going to be the first to send your packets!")
-
-#     # poc_address = (poc_name, int(poc_port)) 
-
-#     for packet in window:
-
-#         # print(packet)
-#         # print(packet[0])
-#         json_pckt = json.loads(packet)  #stringify for printing
-#         # print(json_pckt['seq_number'])
-#         print("sending packet\t" + str(json_pckt['seq_number']))
-#         server.socket.sendto(
-#             packet.encode('utf-8'),
-#             poc_address
-#             )
-
-#         '''
-#         initialize timeouts
-#         '''
-#         # idx = json_pckt['seq_number']
-#         # threads[idx].start()
-#         # threads[idx].join(timeout=5)
-#         # stop_events[idx].set()
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
     # We're sending RTT when it's the first one.
@@ -414,37 +354,6 @@ def findRing(node, cities, path, distance):
         if (city not in path) and (node in cities[city]):
             findRing(city, dict(cities), list(path), distance)
 
-
-'''
-Timeout function borrowed from 
-https://dreamix.eu/blog/webothers/timeout-function-in-python-3
-'''  
-# def ackFirstTimeout(server, poc_address, seq):
-#     """
-#     Function that should timeout after 5 seconds. It simply prints a number and waits 1 second.
-#     :return:
-#     """
-    
-#     print("starting thread " + str(seq))
-#     i = 0
-#     while True:
-#         i += 1
-#         print("Thread:\t" + str(seq) + "Time:\t" + str(i))
-#         time.sleep(1)
- 
-#         # Here we make the check if the other thread sent a signal to stop execution.
-#         if stop_events[seq].is_set():
-#             break
-
-#     print("time for " + str(seq) + " ran out")
-
-#     # pack_sequence += 1
-
-#     # poc_address = (poc_name, int(poc_port))
-
-#     if expected_packet_ack == seq:
-#         send_first_window(server, poc_address)
-
 '''
 Timeout function borrowed from 
 https://dreamix.eu/blog/webothers/timeout-function-in-python-3
@@ -469,14 +378,7 @@ def ackTimeout(server, poc_address, seq, **server_name):
 
     # pack_sequence += 1
 
-    # poc_address = (poc_name, int(poc_port))
-    # if server_name == "server":
-
-
     if expected_packet_ack == seq:
-        # if 'server_name' in server_name and server_name['server_name'] == 'server':
-        #     send_window(server, poc_address, server_name = 'server')
-        # else:
         send_window(server, poc_address)
 
 
