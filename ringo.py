@@ -41,6 +41,8 @@ been_tested = False # for testing unexpected acks
 threads = []    # list of threads used for timeouts\
 stop_events = []
 
+timers = [] # timers used to measure packet timeouts
+
 def usage():
     print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
     sys.exit(1)
@@ -61,6 +63,38 @@ def check_numeric(val, arg):
     except ValueError:
         print(arg + " must be an int")
         sys.exit(1)
+
+class Timer:
+    # should we include a counter, so it gives up after COUNTER tries?
+    # I think not, it should keep trying as long as peer is thought to be alive
+
+    def __init__(self, socket, peer_address, packet):
+        self.thread = Thread(target=self.run)
+        self.socket = socket
+        self.peer_address = peer_address
+        self.packet = packet
+        
+    def run(self):
+        i = 0
+
+        # "timeout" after 5 seconds
+        while i < 5:
+            i += 1
+            time.sleep(1)
+
+        packet_number = json.loads(self.packet)['seq_number']
+        if packet_number == expected_packet_ack: # still waiting for ack?
+            self.socket.sendto(self.packet, self.peer_address)
+            self.run()
+
+
+# Example of Timer() usage
+'''
+timer = Timer()
+timer.run()
+print("well that just happened")
+timer.run()
+'''
 
 
 class MyUDPHandler(socketserver.BaseRequestHandler):
@@ -134,7 +168,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             global expected_packet
             global been_tested
 
-            if seq_number >= 3:#  and been_tested == False:
+            if seq_number >= 6:#  and been_tested == False:
                 pckt_ack = json.dumps({
                         'command': 'file_ack',
                         'ack_number': 3,
@@ -207,11 +241,13 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     '''
                     Set timeout for new packet
                     '''
-                    threads.append(Thread(target=ackTimeout, args=(socketo, self.client_address, pack_sequence, new_pckt,)))
-                    stop_events.append(Event())
-                    threads[-1].start()
-                    threads[-1].join(timeout=5)
-                    stop_events[-1].set()
+                    # threads.append(Thread(target=ackTimeout, args=(socketo, self.client_address, pack_sequence, new_pckt,)))
+                    # stop_events.append(Event())
+                    # threads[-1].start()
+                    # threads[-1].join(timeout=5)
+                    # stop_events[-1].set()
+                    timers.append(Timer(socketo, self.client_address, new_pckt))
+                    timers[-1].run()
 
 
 
@@ -231,7 +267,8 @@ def init_window(server, poc_name, poc_port, filename):
     global pack_sequence
 
     idx = 0
-    while idx < len(file_text) and idx < PACKETS_WINDOW_SIZE:
+    while idx < len(file_text) and idx < PACKETS_WINDOW_SIZE:   # stops if file_text is smaller than a window
+        print(pack_sequence)
         new_pckt = json.dumps({
             'command': 'file',
             'filename': filename,
@@ -240,8 +277,10 @@ def init_window(server, poc_name, poc_port, filename):
             })
         window.append(new_pckt)
 
-        threads.append(Thread(target=ackTimeout, args=(server, poc_address, pack_sequence, new_pckt,)))
-        stop_events.append(Event())
+        # threads.append(Thread(target=ackTimeout, args=(server, poc_address, pack_sequence, new_pckt,)))
+        # stop_events.append(Event())
+
+        timers.append(Timer(server, poc_address, new_pckt))
 
         pack_sequence += 1
         idx += 1
@@ -256,21 +295,15 @@ send window of packets
 def send_window(sock_server, client_address):
     print("I'm going to send your packets!")
 
-    print(sock_server)
+    # print(sock_server)
 
     # print(server_name)
 
-    print(len(window))
+    # print(len(window))
     # poc_address = (poc_name, int(poc_port)) 
     for packet in window:
         json_pckt = json.loads(packet) # stringify for printing
         print("sending packet\t" + str(json_pckt['seq_number']))
-        # if "server_name" in server_name and server_name['server_name'] == "server":
-        #     server.socket.sendto(
-        #         packet.encode('utf-8'),
-        #         poc_address
-        #         )
-        # else:
         sock_server.sendto(
             packet.encode('utf-8'),
             client_address
@@ -280,9 +313,10 @@ def send_window(sock_server, client_address):
         initialize timeouts
         '''
         idx = json_pckt['seq_number']   
-        threads[idx].start()
-        threads[idx].join(timeout=5)
-        stop_events[idx].set()
+        # threads[idx].start()
+        # threads[idx].join(timeout=5)
+        # stop_events[idx].set()
+        timers[idx].run()
 
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
