@@ -32,16 +32,21 @@ expected_packet_ack = 0
 proceed = True # for use with GBN protocol
 window = [] # packet window
 # base = 0    # base of packet window
-file_text = [] # body of file to send
+file_text = []      # body of file to send
+fileLength = 0       # length of file in packets
+forwarded = False   # for use in forwarding
+
 
 been_tested = False # for testing unexpected acks
-
 
 # stop_event = Event()    # Event object used to send signals from one thread to another
 threads = []    # list of threads used for timeouts\
 stop_events = []
 
 timers = [] # timers used to measure packet timeouts
+
+ack_received = False
+stop_event = Event()
 
 def usage():
     print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
@@ -64,28 +69,60 @@ def check_numeric(val, arg):
         print(arg + " must be an int")
         sys.exit(1)
 
-class Timer:
-    # should we include a counter, so it gives up after COUNTER tries?
-    # I think not, it should keep trying as long as peer is thought to be alive
+# def timeout(socketo, client_address, seq_number, new_pckt, timeout):
+#     i = 0
+#     while i < timeout:
+#         time.sleep(1)
+#         i += 1
+#     if (expected_packet_ack == seq_number):
+#         print("TIMEOUT:\tPACKET " + str(seq_number))
 
-    def __init__(self, socket, peer_address, packet):
-        self.thread = Thread(target=self.run)
-        self.socket = socket
-        self.peer_address = peer_address
-        self.packet = packet
+# ack_received = False
+def timeout(packet_number, timeout):
+    i = 0
+    # global ack_received
+    while i < timeout * 100:
+        if stop_events[packet_number].is_set():
+            print("stop event was set")
+            break
+        time.sleep(.01)
+        i += 1
+    if i == (timeout*100):
+        print("TIMEOUT ON "+str(packet_number))
+    # ack_received = False
+
+def writeToFile(filename, number, data):
+
+    if number == 0:
+        f = open(filename, 'w')
+    else:
+        f = open(filename, 'a')
+    f.write(data)
+
+
+
+# class Timer:
+#     # should we include a counter, so it gives up after COUNTER tries?
+#     # I think not, it should keep trying as long as peer is thought to be alive
+
+#     def __init__(self, socket, peer_address, packet):
+#         self.thread = Thread(target=self.run)
+#         self.socket = socket
+#         self.peer_address = peer_address
+#         self.packet = packet
         
-    def run(self):
-        i = 0
+#     def run(self):
+#         i = 0
 
-        # "timeout" after 5 seconds
-        while i < 5:
-            i += 1
-            time.sleep(1)
+#         # "timeout" after 5 seconds
+#         while i < 5:
+#             i += 1
+#             time.sleep(1)
 
-        packet_number = json.loads(self.packet)['seq_number']
-        if packet_number == expected_packet_ack: # still waiting for ack?
-            self.socket.sendto(self.packet, self.peer_address)
-            self.run()
+#         packet_number = json.loads(self.packet)['seq_number']
+#         if packet_number == expected_packet_ack: # still waiting for ack?
+#             self.socket.sendto(self.packet, self.peer_address)
+#             self.run()
 
 
 # Example of Timer() usage
@@ -108,6 +145,10 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
         keyword = json_obj.get('command')
         peers_response = json_obj.get('peers')
         # filename = json_obj.get('filename')
+
+        # print(self)
+        # print()
+        # print(socketo)
 
         if keyword == "peer_discovery":
             peers[str(self.client_address)] = 1  # Add to the Peer List
@@ -158,17 +199,18 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
         elif keyword == "file":
             print("received message data from " + str(self.client_address))
+
             data = json_obj['data']
-            seq_number = json_obj['seq_number']
+            incoming_seq_number = json_obj['seq_number']
             filename = json_obj['filename']
-            print("seq numb\t" + str(seq_number))
+            print("seq numb\t" + str(incoming_seq_number))
 
             f = open('newText.txt', 'a')
 
             global expected_packet
             global been_tested
 
-            if seq_number >= 6:#  and been_tested == False:
+            if incoming_seq_number >= 6 and been_tested == False:
                 pckt_ack = json.dumps({
                         'command': 'file_ack',
                         'ack_number': 3,
@@ -179,18 +221,29 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             else:
                 pckt_ack = json.dumps({
                         'command': 'file_ack',
-                        'ack_number': seq_number,
+                        'ack_number': incoming_seq_number,
                         'filename' : filename,
                         'data': data,
                         })
 
-                if seq_number == expected_packet:
-                    f.write(data)
+                if incoming_seq_number == expected_packet:
+                    # f.write(data)
+                    writeToFile(filename, incoming_seq_number, data)
 
                 expected_packet += 1
 
                 #  UNINDENT AFTER TEST!
                 socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
+
+
+                '''
+                Forward packet
+                '''
+                # global fileLength
+                # global forwarded
+                # # find next peer in ring
+                # if (ack_number == fileLength) and (flag == 'F') and (forwarded == 'False'):
+                #     init_window(socketo, peer_address, filename, fileLength)
 
         elif keyword == "file_ack":
             data = json_obj['data']
@@ -208,7 +261,13 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             else:
 
                 global expected_packet_ack
-                
+                global stop_event
+                # global ack_received
+                # ack_received = True
+                stop_events[ack_number].set()
+                if stop_events[ack_number].is_set():
+                    print("stop event set")
+
                 expected_packet_ack += 1
 
                 print("deleting from window...")
@@ -217,6 +276,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 print(str(len(window)))
 
                 print("FILE SEQUENCE NUMBER:\t" + str(pack_sequence))
+                # print("length of file_text:\t" + str(len(file_text)))
 
                 if pack_sequence < len(file_text):
                     
@@ -227,9 +287,15 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                             'data': file_text[pack_sequence]
                             })
                     print('adding to window...')                
-                    print(str(len(window)))
+
+                    # ack_received = False
+                    # stop_event = Event()
+                    stop_events.append(Event())
+                    Thread(target=timeout, args=(pack_sequence, 5,)).start()
 
                     window.append(new_pckt)
+                    print(str(len(window)))
+
 
                     pack_sequence += 1
 
@@ -241,13 +307,16 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     '''
                     Set timeout for new packet
                     '''
-                    # threads.append(Thread(target=ackTimeout, args=(socketo, self.client_address, pack_sequence, new_pckt,)))
+                    # threads.append(Thread(target=timeout, args=(socketo, self.client_address, pack_sequence, new_pckt, 5,)))
                     # stop_events.append(Event())
                     # threads[-1].start()
                     # threads[-1].join(timeout=5)
                     # stop_events[-1].set()
-                    timers.append(Timer(socketo, self.client_address, new_pckt))
-                    timers[-1].run()
+
+
+
+                    # timers.append(Timer(socketo, self.client_address, new_pckt))
+                    # timers[-1].run()
 
 
 
@@ -259,10 +328,9 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 """
 initialize packet window
 """
-def init_window(server, poc_name, poc_port, filename):
+def init_window(server, peer_address, filename, file_length):
     print("I want to send your message!")
 
-    poc_address = (poc_name, int(poc_port))
 
     global pack_sequence
 
@@ -272,21 +340,22 @@ def init_window(server, poc_name, poc_port, filename):
         new_pckt = json.dumps({
             'command': 'file',
             'filename': filename,
+            'file_length': file_length, #length in packets
             'seq_number': pack_sequence,
             'data': file_text[expected_packet_ack+idx]
             })
         window.append(new_pckt)
 
-        # threads.append(Thread(target=ackTimeout, args=(server, poc_address, pack_sequence, new_pckt,)))
+        # threads.append(Thread(target=timeout, args=(server, poc_address, pack_sequence, new_pckt, 5,)))
         # stop_events.append(Event())
 
-        timers.append(Timer(server, poc_address, new_pckt))
+        # timers.append(Timer(server, poc_address, new_pckt))
 
         pack_sequence += 1
         idx += 1
 
     # send_first_window(server, poc_address)
-    send_window(server, poc_address)
+    send_window(server, peer_address)
 
 
 '''
@@ -302,21 +371,35 @@ def send_window(sock_server, client_address):
     # print(len(window))
     # poc_address = (poc_name, int(poc_port)) 
     for packet in window:
-        json_pckt = json.loads(packet) # stringify for printing
-        print("sending packet\t" + str(json_pckt['seq_number']))
-        sock_server.sendto(
-            packet.encode('utf-8'),
-            client_address
-            )
+        # json_pckt = json.loads(packet) # stringify for printing
+        # print("sending packet\t" + str(json_pckt['seq_number']))
+        # sock_server.sendto(
+        #     packet.encode('utf-8'),
+        #     client_address
+        #     )
+        send_packet(sock_server, client_address, packet)
 
         '''
         initialize timeouts
         '''
-        idx = json_pckt['seq_number']   
-        # threads[idx].start()
-        # threads[idx].join(timeout=5)
-        # stop_events[idx].set()
-        timers[idx].run()
+        # seq_number = json_pckt['seq_number']   
+        
+        # threads[seq_number].start()
+        # threads[seq_number].join(timeout=5)
+        # stop_events[seq_number].set()
+        
+        # Thread(target=timeout,args=(sock_server, client_address, seq_number, packet, 5,)).start()
+
+        # timers[idx].run()
+
+def send_packet(socket, client_address, packet):
+    json_pckt = json.loads(packet) # stringify for printing
+    print("sending packet\t" + str(json_pckt['seq_number']))
+    socket.sendto(
+        packet.encode('utf-8'),
+        client_address
+        )
+    stop_events.append(Event())
 
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
@@ -503,8 +586,8 @@ def main():
     print ("\n")
 
     # very hacky way to write data to file: open here, append later
-    if flag == "R":
-        f = open('newText.txt', 'w')
+    # if flag == "R":
+    #     f = open('newText.txt', 'w')
 
     while True:
         print('Enter Commands (show-matrix, show-ring or disconnect)')
@@ -543,11 +626,15 @@ def main():
                     file_text.append(data[idx:idx+SEND_BUF])
                     idx += SEND_BUF
                 file_text.append(data[idx:])
+                # print("INIT LENGTH OF FILE_TEXT:\t" + str(len(file_text)))
+                file_length = len(file_text)
 
                 f.close()
                 # print(len(file_text))
                 # sys.exit(1)
-                init_window(server.socket, peer_address, peer_port, file_name)
+                destination = (poc_name, int(poc_port))
+
+                init_window(server.socket, destination, file_name, file_length)
 
 
 if __name__ == "__main__":
@@ -555,33 +642,3 @@ if __name__ == "__main__":
 
 
 
-
-# We create another Thread
-# threads.append(Thread(target=do_actions, args=(0,)))
-# threads.append(Thread(target=do_actions, args=(1,)))
-# threads.append(Thread(target=do_actions, args=(2,)))
-
-# for i in range(len(threads)):
-#     event = Event()
-#     stop_events.append(event)
-
-
-# # Here we start the thread and we wait 5 seconds before the code continues to execute.
-# print("length of threads list is " + str(len(threads)))
-# for i in range(len(threads)):
-#     threads[i].start()
-#     threads[i].join(timeout=5)
-#     stop_events[i].set()
-
-
-# # We send a signal that the other thread should stop.
-# # stop_event.set()
-
-# idx = 0
-# if (expected_packet_ack != idx):
-#     print("not ok")
-# else:
-#     print("ok")
-# print("Hey there! I timed out! You can do things after me!")
-
-# sys.exit(1)
