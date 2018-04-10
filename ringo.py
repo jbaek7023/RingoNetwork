@@ -112,7 +112,7 @@ def timeout(server, client_address, packet_number, timeout):
     # ack_received = False
 
 def writeToFile(filename, number, data):
-
+    print("writing from " + str(number))
     if number == 0:
         f = open(filename, 'w')
     else:
@@ -226,7 +226,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             file_length = json_obj['file_length']
             print("seq numb\t" + str(incoming_seq_number))
 
-            f = open('newText.txt', 'a')
+            # f = open('newText.txt', 'a')
 
             global expected_packet
             global been_tested1
@@ -269,14 +269,14 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     # f.write(data)
                     writeToFile(filename, incoming_seq_number, data)
 
-                expected_packet += 1
+                    expected_packet += 1
 
             socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
 
             '''
             THIS IS WHERE FILE FORWARDING WOULD TAKE PLACE
             '''
-            print("FILE_LENGTH: "+str(file_length))
+            # print("FILE_LENGTH: "+str(file_length))
 
             # Signal to user that it is safe to input again
             if (incoming_seq_number == file_length-1):
@@ -346,11 +346,12 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     # if stop_events length is set...
                     stop_events[pack_sequence % 5].clear()
 
+                    window.append(new_pckt)
+                    print(str(len(window)))
 
                     Thread(target=timeout, args=(socketo, self.client_address, pack_sequence, 5,)).start()
 
-                    window.append(new_pckt)
-                    print(str(len(window)))
+                    
 
 
                     pack_sequence += 1
