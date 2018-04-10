@@ -18,6 +18,11 @@ import timeit
 import ast
 # import socket
 
+'''
+TODO:
+use window size on stop_events
+'''
+
 PACKETS_WINDOW_SIZE = 5  # this many packets may be designated by number
 # GO_BACK_N = PACKETS_WINDOW_SIZE / 2 # this many packets may remain unacknowledged
 SEND_BUF = 1024 # size of msg send buffer
@@ -37,16 +42,25 @@ fileLength = 0       # length of file in packets
 forwarded = False   # for use in forwarding
 
 
-been_tested = False # for testing unexpected acks
+been_tested1 = False # for testing unexpected acks
+been_tested2 = False
 
 # stop_event = Event()    # Event object used to send signals from one thread to another
 threads = []    # list of threads used for timeouts\
-stop_events = []
+# stop_events = []
 
 timers = [] # timers used to measure packet timeouts
 
 ack_received = False
-stop_event = Event()
+# stop_event = Event()
+
+# cliAddr = ""    # this will be integrated into global "manager"
+stop_events = [] 
+
+# populate stop_events with 5 different events
+for i in range(PACKETS_WINDOW_SIZE):
+    stop_events.append(Event())
+
 
 def usage():
     print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
@@ -78,17 +92,23 @@ def check_numeric(val, arg):
 #         print("TIMEOUT:\tPACKET " + str(seq_number))
 
 # ack_received = False
-def timeout(packet_number, timeout):
+def timeout(server, client_address, packet_number, timeout):
     i = 0
     # global ack_received
     while i < timeout * 100:
-        if stop_events[packet_number].is_set():
-            print("stop event was set")
+        if stop_events[packet_number % 5].is_set():
+            print("stop event " + str(packet_number % 5) + " was set")
             break
         time.sleep(.01)
         i += 1
-    if i == (timeout*100):
+    if i >= (timeout*100):
         print("TIMEOUT ON "+str(packet_number))
+        # print(json.loads(window[expected_packet_ack])['seq_number'])
+        if packet_number == expected_packet_ack or packet_number == expected_packet_ack + PACKETS_WINDOW_SIZE-1:
+            # resend window if lost first packet or if timed out on packet before it was expected 
+            # that's a thing that can happen because python is weird
+            print("PACKET " + str(packet_number) +" RESENDS WINDOW")
+            send_window(server, client_address)
     # ack_received = False
 
 def writeToFile(filename, number, data):
@@ -203,26 +223,45 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             data = json_obj['data']
             incoming_seq_number = json_obj['seq_number']
             filename = json_obj['filename']
+            file_length = json_obj['file_length']
             print("seq numb\t" + str(incoming_seq_number))
 
             f = open('newText.txt', 'a')
 
             global expected_packet
-            global been_tested
+            global been_tested1
+            global been_tested2
 
-            if incoming_seq_number >= 6 and been_tested == False:
+            json_pckt = ""
+
+            if incoming_seq_number == 6 and been_tested1 == False:
+                # pckt_ack = json.dumps({
+                #         'command': 'file_ack',
+                #         'ack_number': 3,
+                #         'filename' : filename,
+                #         'data': data
+                #         })
+                # been_tested1 = True
+
+                # DO NOTHING; TESTING TIME OUT ON WITH NO ACK
+                been_tested1 = True
+
+            
+            elif incoming_seq_number == 23 and been_tested2 == False:
                 pckt_ack = json.dumps({
                         'command': 'file_ack',
                         'ack_number': 3,
                         'filename' : filename,
+                        'file_length': file_length,
                         'data': data
                         })
-                been_tested = True
+                been_tested2 = True
             else:
                 pckt_ack = json.dumps({
                         'command': 'file_ack',
                         'ack_number': incoming_seq_number,
                         'filename' : filename,
+                        'file_length': file_length,
                         'data': data,
                         })
 
@@ -232,9 +271,17 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                 expected_packet += 1
 
-                #  UNINDENT AFTER TEST!
-                socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
+            socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
 
+            '''
+            THIS IS WHERE FILE FORWARDING WOULD TAKE PLACE
+            '''
+            print("FILE_LENGTH: "+str(file_length))
+
+            # Signal to user that it is safe to input again
+            if (incoming_seq_number == file_length-1):
+                print("File fully received!")
+                print(">")
 
                 '''
                 Forward packet
@@ -249,6 +296,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             data = json_obj['data']
             ack_number = json_obj['ack_number']
             filename = json_obj['filename']
+            file_length = json_obj['file_length']
             print("expected ack\t" + str(expected_packet_ack))
             print("ack numb received\t" + str(ack_number))
 
@@ -264,8 +312,8 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 global stop_event
                 # global ack_received
                 # ack_received = True
-                stop_events[ack_number].set()
-                if stop_events[ack_number].is_set():
+                stop_events[ack_number % 5].set()
+                if stop_events[ack_number % 5].is_set():
                     print("stop event set")
 
                 expected_packet_ack += 1
@@ -283,6 +331,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     new_pckt = json.dumps({
                             'command': 'file',
                             'filename': filename,
+                            'file_length':file_length,
                             'seq_number': pack_sequence,
                             'data': file_text[pack_sequence]
                             })
@@ -290,8 +339,15 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                     # ack_received = False
                     # stop_event = Event()
-                    stop_events.append(Event())
-                    Thread(target=timeout, args=(pack_sequence, 5,)).start()
+
+                    # if appending new stop events...
+                    # stop_events.append(Event())
+
+                    # if stop_events length is set...
+                    stop_events[pack_sequence % 5].clear()
+
+
+                    Thread(target=timeout, args=(socketo, self.client_address, pack_sequence, 5,)).start()
 
                     window.append(new_pckt)
                     print(str(len(window)))
@@ -299,10 +355,17 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                     pack_sequence += 1
 
-                    socketo.sendto(
-                        new_pckt.encode('utf-8'),
-                        self.client_address
-                        )
+                    send_packet(socketo, self.client_address, new_pckt)
+
+                    # Signal to user that it is safe to input again
+                    if (pack_sequence == file_length-1):
+                        print("File fully sent!")
+                        print(">")
+
+                    # socketo.sendto(
+                    #     new_pckt.encode('utf-8'),
+                    #     self.client_address
+                    #     )
 
                     '''
                     Set timeout for new packet
@@ -399,7 +462,8 @@ def send_packet(socket, client_address, packet):
         packet.encode('utf-8'),
         client_address
         )
-    stop_events.append(Event())
+    # stop_events.append(Event())
+    stop_events[json_pckt['seq_number'] % 5].clear()
 
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
@@ -471,35 +535,7 @@ def findRing(node, cities, path, distance):
         if (city not in path) and (node in cities[city]):
             findRing(city, dict(cities), list(path), distance)
 
-'''
-Timeout function borrowed from 
-https://dreamix.eu/blog/webothers/timeout-function-in-python-3
-'''  
-def ackTimeout(server, poc_address, seq, **server_name):
-    """
-    Function that should timeout after 5 seconds. It simply prints a number and waits 1 second.
-    :return:
-    """
-    print("starting thread " + str(seq))
-    i = 0
-    while True:
-        i += 1
-        print("Thread:\t" + str(seq) + "Time:\t" + str(i))
-        time.sleep(1)
- 
-        # Here we make the check if the other thread sent a signal to stop execution.
-        if stop_events[seq].is_set():
-            break
 
-    print("time for " + str(seq) + " ran out")
-
-    # pack_sequence += 1
-
-    if expected_packet_ack == seq:
-        send_window(server, poc_address)
-
-
-# stop_event = Event()
 
 def main():
 
