@@ -114,13 +114,16 @@ def timeout(server, client_address, file_length, timeout):
             print(expected_packet_ack)
             send_window(server, client_address, file_length)
 
-def writeToFile(filename, number, data):
-    print("writing from " + str(number))
-    if number == 0:
-        f = open(filename, 'w')
-    else:
-        f = open(filename, 'a')
-    f.write(data)
+def writeToFile(filename, file_length):
+    print("writing file " + str(filename))
+    # if number == 0:
+    #     f = open(filename, 'w')
+    # else:
+    #     f = open(filename, 'a')
+    f = open(filename, 'w')
+    global file_text
+    for idx in range(file_length):
+      f.write(file_text[idx])
 
 
 
@@ -258,7 +261,8 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
             if incoming_seq_number == expected_packet:
                 # f.write(data)
-                writeToFile(filename, incoming_seq_number, data)
+                # writeToFile(filename, incoming_seq_number, data)
+                file_text.append(data)
 
                 expected_packet += 1
 
@@ -274,11 +278,13 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 print("File fully received!")
                 print(">")
                 print("flag: " + flag)
+                if flag == 'R':
+                    writeToFile(filename, file_length)
                 global forwarded
                 if flag == 'F' and forwarded == False:
                     print("I'm forwarding this file!")
                     global nextAddress
-                    init_window(socketo, nextAddress, filename, fileLength)
+                    init_window(socketo, nextAddress, filename, file_length)
 
             '''
             Forward packet
@@ -424,33 +430,9 @@ send window of packets
 def send_window(sock_server, client_address, file_length):
     print("I'm going to send your packets!")
 
-    # print(sock_server)
-
-    # print(server_name)
-
-    # print(len(window))
-    # poc_address = (poc_name, int(poc_port)) 
     for packet in window:
-        # json_pckt = json.loads(packet) # stringify for printing
-        # print("sending packet\t" + str(json_pckt['seq_number']))
-        # sock_server.sendto(
-        #     packet.encode('utf-8'),
-        #     client_address
-        #     )
+        
         send_packet(sock_server, client_address, file_length, packet)
-
-        '''
-        initialize timeouts
-        '''
-        # seq_number = json_pckt['seq_number']   
-        
-        # threads[seq_number].start()
-        # threads[seq_number].join(timeout=5)
-        # stop_events[seq_number].set()
-        
-        # Thread(target=timeout,args=(sock_server, client_address, seq_number, packet, 5,)).start()
-
-        # timers[idx].run()
 
 def send_packet(socket, client_address, file_length, packet):
     json_pckt = json.loads(packet) # stringify for printing
@@ -635,11 +617,12 @@ def main():
 
     print("My address:\t" + str(routes[0][1][0]))   #this will always be the current ringo
     print("Next address:\t" + str(routes[0][1][1])) #next ringo in optimal ring
-    # nextAddress = routes[0][1][1]
+    
     nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
     nextPort = int(routes[0][1][1].split(",")[1][:5])
-    # nextAddress = (nextName, nextPort)
-    nextAddress = ('127.0.0.1',6000)
+    global nextAddress
+    nextAddress = (nextName, nextPort)
+    # nextAddress = ('127.0.0.1',6000)
 
     while True:
         print('Enter Commands (show-matrix, show-ring or disconnect)')
