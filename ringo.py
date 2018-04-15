@@ -6,15 +6,11 @@
 # bestRing() is a slightly modified version of the function of a brute-force solution created by Simon Westphahl <westphahl@gmail.com>;
 # modifications made include renaming and converting to python3
 #
-
-import socket
 import socketserver
 import sys
 from threading import Thread
-from datetime import datetime
 import time
 import json
-import timeit
 import ast
 import socket
 
@@ -25,7 +21,7 @@ routes = [] # for use in findRing()
 
 
 def usage():
-    print ("Usage: python ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
+    print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
     sys.exit(1)
 
 def check_flag(role):
@@ -158,7 +154,6 @@ def send_rtt_vector(server, peers, poc_name, poc_port):
 def discovery(server, peers, poc_name, poc_port):
     # We're sending RTT when it's the first one.
     poc_address = (poc_name, int(poc_port))
-    # peers[str(poc_address)] = 0  # We don't know the RTT btw this ringo and PoC yet
     peer_data = json.dumps({
         'command': 'peer_discovery',
         'peers': peers,
@@ -221,10 +216,14 @@ def main():
     # python3 ringo.py S 100.0 john 90 90
     flag = sys.argv[1]  # Getting a flag i.e) S, F, R
     local_port = sys.argv[2]  # Getting a local port i.e) 23222
-    poc_name = sys.argv[3]  # Getting the port name i.e) networklab3.cc.gatech.edu
+    poc_name = sys.argv[3]  # Getting the port name i.e) jbaek60@networklab3.cc.gatech.edu
     poc_port = sys.argv[4]  # Getting the port number i.e) 8080 or 13445
     global num_of_ringos
     num_of_ringos = sys.argv[5]  # Getting the number of ringos i.e) 5
+
+    if poc_name != "0":
+        poc_name = socket.gethostbyname(poc_name)
+        print(poc_name)
 
     # Define RTT Table
     # Checking if we get the right argument types
@@ -240,6 +239,11 @@ def main():
 
     # host = socket.gethostbyname(socket.gethostname())
     HOST, PORT = host, int(local_port)
+    host = "127.0.0.1"
+    HOST = "127.0.0.1"
+    # host = socket.gethostbyname(socket.gethostname())
+    HOST, PORT = host, int(local_port)
+
     server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
     server_thread = Thread(target=server.serve_forever, args=())
     server_thread.daemon = False
