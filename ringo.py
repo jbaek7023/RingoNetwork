@@ -61,6 +61,8 @@ stop_events = []
 for i in range(PACKETS_WINDOW_SIZE):
     stop_events.append(Event())
 
+sendTimes = []
+nextAddress = ()
 
 def usage():
     print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
@@ -83,33 +85,34 @@ def check_numeric(val, arg):
         print(arg + " must be an int")
         sys.exit(1)
 
-# def timeout(socketo, client_address, seq_number, new_pckt, timeout):
-#     i = 0
-#     while i < timeout:
-#         time.sleep(1)
-#         i += 1
-#     if (expected_packet_ack == seq_number):
-#         print("TIMEOUT:\tPACKET " + str(seq_number))
 
-# ack_received = False
-def timeout(server, client_address, packet_number, timeout):
-    i = 0
-    # global ack_received
-    while i < timeout * 100:
-        if stop_events[packet_number % 5].is_set():
-            print("stop event " + str(packet_number % 5) + " was set")
-            break
-        time.sleep(.01)
-        i += 1
-    if i >= (timeout*100):
-        print("TIMEOUT ON "+str(packet_number))
-        # print(json.loads(window[expected_packet_ack])['seq_number'])
-        if packet_number == expected_packet_ack or packet_number == expected_packet_ack + PACKETS_WINDOW_SIZE-1:
-            # resend window if lost first packet or if timed out on packet before it was expected 
-            # that's a thing that can happen because python is weird
-            print("PACKET " + str(packet_number) +" RESENDS WINDOW")
-            send_window(server, client_address)
-    # ack_received = False
+# def timeout(server, client_address, packet_number, timeout):
+#     i = 0
+#     while i < timeout * 100:
+#         if stop_events[packet_number % 5].is_set():
+#             print("stop event " + str(packet_number % 5) + " was set")
+#             break
+#         time.sleep(.01)
+#         i += 1
+
+#     if i >= (timeout*100):
+#         print("TIMEOUT ON "+str(packet_number))
+#         if packet_number == expected_packet_ack or packet_number == expected_packet_ack + PACKETS_WINDOW_SIZE-1:
+#             # resend window if lost first packet or if timed out on packet before it was expected 
+#             # that's a thing that can happen because python is weird
+#             print("PACKET " + str(packet_number) +" RESENDS WINDOW")
+#             send_window(server, client_address)
+
+timeoutSet = False
+def timeout(server, client_address, file_length, timeout):
+
+    while(expected_packet_ack < file_length):
+        time.sleep(1)
+        now = time.time()
+        print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
+        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + timeout):
+            print(expected_packet_ack)
+            send_window(server, client_address, file_length)
 
 def writeToFile(filename, number, data):
     print("writing from " + str(number))
@@ -234,42 +237,30 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
             json_pckt = ""
 
-            if incoming_seq_number == 6 and been_tested1 == False:
-                # pckt_ack = json.dumps({
-                #         'command': 'file_ack',
-                #         'ack_number': 3,
-                #         'filename' : filename,
-                #         'data': data
-                #         })
-                # been_tested1 = True
-
-                # DO NOTHING; TESTING TIME OUT ON WITH NO ACK
-                been_tested1 = True
+            # if incoming_seq_number == 6 and been_tested1 == False:
+               
+            #     # DO NOTHING
+            #     been_tested1 = True
 
             
-            elif incoming_seq_number == 23 and been_tested2 == False:
-                pckt_ack = json.dumps({
-                        'command': 'file_ack',
-                        'ack_number': 3,
-                        'filename' : filename,
-                        'file_length': file_length,
-                        'data': data
-                        })
-                been_tested2 = True
-            else:
-                pckt_ack = json.dumps({
-                        'command': 'file_ack',
-                        'ack_number': incoming_seq_number,
-                        'filename' : filename,
-                        'file_length': file_length,
-                        'data': data,
-                        })
+            # elif incoming_seq_number == 23 and been_tested2 == False:
 
-                if incoming_seq_number == expected_packet:
-                    # f.write(data)
-                    writeToFile(filename, incoming_seq_number, data)
+            #     # DO NOTHING
+            #     been_tested2 = True
+            # else:
+            pckt_ack = json.dumps({
+                    'command': 'file_ack',
+                    'ack_number': incoming_seq_number,
+                    'filename' : filename,
+                    'file_length': file_length,
+                    'data': data,
+                    })
 
-                    expected_packet += 1
+            if incoming_seq_number == expected_packet:
+                # f.write(data)
+                writeToFile(filename, incoming_seq_number, data)
+
+                expected_packet += 1
 
             socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
 
@@ -282,15 +273,20 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             if (incoming_seq_number == file_length-1):
                 print("File fully received!")
                 print(">")
+                print("flag: " + flag)
+                global forwarded
+                if flag == 'F' and forwarded == False:
+                    print("I'm forwarding this file!")
+                    global nextAddress
+                    init_window(socketo, nextAddress, filename, fileLength)
 
-                '''
-                Forward packet
-                '''
-                # global fileLength
-                # global forwarded
-                # # find next peer in ring
-                # if (ack_number == fileLength) and (flag == 'F') and (forwarded == 'False'):
-                #     init_window(socketo, peer_address, filename, fileLength)
+            '''
+            Forward packet
+            '''
+            # global fileLength
+            # global forwarded
+            # # find next peer in ring
+            
 
         elif keyword == "file_ack":
             data = json_obj['data']
@@ -349,14 +345,14 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     window.append(new_pckt)
                     print(str(len(window)))
 
-                    Thread(target=timeout, args=(socketo, self.client_address, pack_sequence, 5,)).start()
+                    # Thread(target=timeout, args=(socketo, self.client_address, pack_sequence, 5,)).start()
 
                     
 
 
                     pack_sequence += 1
 
-                    send_packet(socketo, self.client_address, new_pckt)
+                    send_packet(socketo, self.client_address, file_length, new_pckt)
 
                     # Signal to user that it is safe to input again
                     if (pack_sequence == file_length-1):
@@ -419,13 +415,13 @@ def init_window(server, peer_address, filename, file_length):
         idx += 1
 
     # send_first_window(server, poc_address)
-    send_window(server, peer_address)
+    send_window(server, peer_address, file_length)
 
 
 '''
 send window of packets
 '''
-def send_window(sock_server, client_address):
+def send_window(sock_server, client_address, file_length):
     print("I'm going to send your packets!")
 
     # print(sock_server)
@@ -441,7 +437,7 @@ def send_window(sock_server, client_address):
         #     packet.encode('utf-8'),
         #     client_address
         #     )
-        send_packet(sock_server, client_address, packet)
+        send_packet(sock_server, client_address, file_length, packet)
 
         '''
         initialize timeouts
@@ -456,15 +452,25 @@ def send_window(sock_server, client_address):
 
         # timers[idx].run()
 
-def send_packet(socket, client_address, packet):
+def send_packet(socket, client_address, file_length, packet):
     json_pckt = json.loads(packet) # stringify for printing
     print("sending packet\t" + str(json_pckt['seq_number']))
+    print("sending to " + str(client_address))
     socket.sendto(
         packet.encode('utf-8'),
         client_address
         )
     # stop_events.append(Event())
     stop_events[json_pckt['seq_number'] % 5].clear()
+
+    sendTimes.append(time.time())
+    global timeoutSet
+    if (json_pckt['seq_number'] == 0 and not timeoutSet):
+        print("BEGINNING THREAD")
+        timeoutSet = True
+        Thread(target=timeout,args=(socket, client_address, file_length, 5,)).start()
+
+    
 
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
@@ -548,6 +554,7 @@ def main():
     # sys.exit(1)
     # Interpret the argument
     # python3 ringo.py S 100.0 john 90 90
+    global flag
     flag = sys.argv[1]  # Getting a flag i.e) S, F, R
     local_port = sys.argv[2]  # Getting a local port i.e) 23222
     poc_name = sys.argv[3]  # Getting the port name i.e) networklab3.cc.gatech.edu
@@ -626,6 +633,14 @@ def main():
     # if flag == "R":
     #     f = open('newText.txt', 'w')
 
+    print("My address:\t" + str(routes[0][1][0]))   #this will always be the current ringo
+    print("Next address:\t" + str(routes[0][1][1])) #next ringo in optimal ring
+    # nextAddress = routes[0][1][1]
+    nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+    nextPort = int(routes[0][1][1].split(",")[1][:5])
+    # nextAddress = (nextName, nextPort)
+    nextAddress = ('127.0.0.1',6000)
+
     while True:
         print('Enter Commands (show-matrix, show-ring or disconnect)')
         text = input('> ')
@@ -671,7 +686,7 @@ def main():
                 # sys.exit(1)
                 destination = (poc_name, int(poc_port))
 
-                init_window(server.socket, destination, file_name, file_length)
+                init_window(server.socket, nextAddress, file_name, file_length)
 
 
 if __name__ == "__main__":
