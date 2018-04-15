@@ -18,13 +18,8 @@ import timeit
 import ast
 # import socket
 
-'''
-TODO:
-use window size on stop_events
-'''
 
 PACKETS_WINDOW_SIZE = 5  # this many packets may be designated by number
-# GO_BACK_N = PACKETS_WINDOW_SIZE / 2 # this many packets may remain unacknowledged
 SEND_BUF = 1024 # size of msg send buffer
 
 peers = {}
@@ -34,35 +29,16 @@ routes = [] # for use in findRing()
 pack_sequence = 0 # current sequence number
 expected_packet = 0 # for use with receiving message
 expected_packet_ack = 0
-proceed = True # for use with GBN protocol
 window = [] # packet window
-# base = 0    # base of packet window
 file_text = []      # body of file to send
-fileLength = 0       # length of file in packets
+
 forwarded = False   # for use in forwarding
 
+sendTimes = []  # the times at which packets are sent
+nextAddress = ()    # the neighbor to which a message is to be forwarded
 
-been_tested1 = False # for testing unexpected acks
-been_tested2 = False
+path = "optimal" # may be set to optimal or opposite
 
-# stop_event = Event()    # Event object used to send signals from one thread to another
-threads = []    # list of threads used for timeouts\
-# stop_events = []
-
-timers = [] # timers used to measure packet timeouts
-
-ack_received = False
-# stop_event = Event()
-
-# cliAddr = ""    # this will be integrated into global "manager"
-stop_events = [] 
-
-# populate stop_events with 5 different events
-for i in range(PACKETS_WINDOW_SIZE):
-    stop_events.append(Event())
-
-sendTimes = []
-nextAddress = ()
 
 def usage():
     print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
@@ -86,27 +62,11 @@ def check_numeric(val, arg):
         sys.exit(1)
 
 
-# def timeout(server, client_address, packet_number, timeout):
-#     i = 0
-#     while i < timeout * 100:
-#         if stop_events[packet_number % 5].is_set():
-#             print("stop event " + str(packet_number % 5) + " was set")
-#             break
-#         time.sleep(.01)
-#         i += 1
-
-#     if i >= (timeout*100):
-#         print("TIMEOUT ON "+str(packet_number))
-#         if packet_number == expected_packet_ack or packet_number == expected_packet_ack + PACKETS_WINDOW_SIZE-1:
-#             # resend window if lost first packet or if timed out on packet before it was expected 
-#             # that's a thing that can happen because python is weird
-#             print("PACKET " + str(packet_number) +" RESENDS WINDOW")
-#             send_window(server, client_address)
-
 timeoutSet = False
-def timeout(server, client_address, file_length, timeout):
+def timeout(server, client_address, file_length, this_path, timeout):
 
-    while(expected_packet_ack < file_length):
+    global path
+    while(expected_packet_ack < file_length and this_path == path):
         time.sleep(1)
         now = time.time()
         print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
@@ -116,10 +76,7 @@ def timeout(server, client_address, file_length, timeout):
 
 def writeToFile(filename, file_length):
     print("writing file " + str(filename))
-    # if number == 0:
-    #     f = open(filename, 'w')
-    # else:
-    #     f = open(filename, 'a')
+
     f = open(filename, 'w')
     global file_text
     for idx in range(file_length):
@@ -127,54 +84,13 @@ def writeToFile(filename, file_length):
 
 
 
-# class Timer:
-#     # should we include a counter, so it gives up after COUNTER tries?
-#     # I think not, it should keep trying as long as peer is thought to be alive
-
-#     def __init__(self, socket, peer_address, packet):
-#         self.thread = Thread(target=self.run)
-#         self.socket = socket
-#         self.peer_address = peer_address
-#         self.packet = packet
-        
-#     def run(self):
-#         i = 0
-
-#         # "timeout" after 5 seconds
-#         while i < 5:
-#             i += 1
-#             time.sleep(1)
-
-#         packet_number = json.loads(self.packet)['seq_number']
-#         if packet_number == expected_packet_ack: # still waiting for ack?
-#             self.socket.sendto(self.packet, self.peer_address)
-#             self.run()
-
-
-# Example of Timer() usage
-'''
-timer = Timer()
-timer.run()
-print("well that just happened")
-timer.run()
-'''
-
-
 class MyUDPHandler(socketserver.BaseRequestHandler):
     def handle(self):
         data = self.request[0]
         socketo = self.request[1]
-        # self.client_address[0] : 127.0.0.1
-        # self.client_address[0] : 12443 port.
-        # print(data.decode("utf-8"))
         json_obj = json.loads(data.decode("utf-8"))
         keyword = json_obj.get('command')
         peers_response = json_obj.get('peers')
-        # filename = json_obj.get('filename')
-
-        # print(self)
-        # print()
-        # print(socketo)
 
         if keyword == "peer_discovery":
             peers[str(self.client_address)] = 1  # Add to the Peer List
@@ -187,7 +103,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 'peers': peers,
                 'ttl': ttl
             })
-            # num_of_ringos = sys.argv[5]
+
             if ttl > 0:
                 socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
         elif keyword == "find_rtt":
@@ -232,7 +148,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             file_length = json_obj['file_length']
             print("seq numb\t" + str(incoming_seq_number))
 
-            # f = open('newText.txt', 'a')
 
             global expected_packet
             global been_tested1
@@ -240,17 +155,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
             json_pckt = ""
 
-            # if incoming_seq_number == 6 and been_tested1 == False:
-               
-            #     # DO NOTHING
-            #     been_tested1 = True
-
-            
-            # elif incoming_seq_number == 23 and been_tested2 == False:
-
-            #     # DO NOTHING
-            #     been_tested2 = True
-            # else:
             pckt_ack = json.dumps({
                     'command': 'file_ack',
                     'ack_number': incoming_seq_number,
@@ -260,39 +164,32 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     })
 
             if incoming_seq_number == expected_packet:
-                # f.write(data)
-                # writeToFile(filename, incoming_seq_number, data)
                 file_text.append(data)
 
                 expected_packet += 1
 
             socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
 
-            '''
-            THIS IS WHERE FILE FORWARDING WOULD TAKE PLACE
-            '''
-            # print("FILE_LENGTH: "+str(file_length))
-
             # Signal to user that it is safe to input again
             if (incoming_seq_number == file_length-1):
                 print("File fully received!")
                 print(">")
                 print("flag: " + flag)
+
+                '''
+                Write file at receiver
+                '''
                 if flag == 'R':
                     writeToFile(filename, file_length)
+
+                '''
+                Forward file
+                '''
                 global forwarded
                 if flag == 'F' and forwarded == False:
                     print("I'm forwarding this file!")
                     global nextAddress
                     init_window(socketo, nextAddress, filename, file_length)
-
-            '''
-            Forward packet
-            '''
-            # global fileLength
-            # global forwarded
-            # # find next peer in ring
-            
 
         elif keyword == "file_ack":
             data = json_obj['data']
@@ -312,11 +209,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                 global expected_packet_ack
                 global stop_event
-                # global ack_received
-                # ack_received = True
-                stop_events[ack_number % 5].set()
-                if stop_events[ack_number % 5].is_set():
-                    print("stop event set")
 
                 expected_packet_ack += 1
 
@@ -339,21 +231,9 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                             })
                     print('adding to window...')                
 
-                    # ack_received = False
-                    # stop_event = Event()
-
-                    # if appending new stop events...
-                    # stop_events.append(Event())
-
-                    # if stop_events length is set...
-                    stop_events[pack_sequence % 5].clear()
 
                     window.append(new_pckt)
                     print(str(len(window)))
-
-                    # Thread(target=timeout, args=(socketo, self.client_address, pack_sequence, 5,)).start()
-
-                    
 
 
                     pack_sequence += 1
@@ -364,25 +244,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     if (pack_sequence == file_length-1):
                         print("File fully sent!")
                         print(">")
-
-                    # socketo.sendto(
-                    #     new_pckt.encode('utf-8'),
-                    #     self.client_address
-                    #     )
-
-                    '''
-                    Set timeout for new packet
-                    '''
-                    # threads.append(Thread(target=timeout, args=(socketo, self.client_address, pack_sequence, new_pckt, 5,)))
-                    # stop_events.append(Event())
-                    # threads[-1].start()
-                    # threads[-1].join(timeout=5)
-                    # stop_events[-1].set()
-
-
-
-                    # timers.append(Timer(socketo, self.client_address, new_pckt))
-                    # timers[-1].run()
 
 
 
@@ -412,15 +273,9 @@ def init_window(server, peer_address, filename, file_length):
             })
         window.append(new_pckt)
 
-        # threads.append(Thread(target=timeout, args=(server, poc_address, pack_sequence, new_pckt, 5,)))
-        # stop_events.append(Event())
-
-        # timers.append(Timer(server, poc_address, new_pckt))
-
         pack_sequence += 1
         idx += 1
 
-    # send_first_window(server, poc_address)
     send_window(server, peer_address, file_length)
 
 
@@ -442,15 +297,13 @@ def send_packet(socket, client_address, file_length, packet):
         packet.encode('utf-8'),
         client_address
         )
-    # stop_events.append(Event())
-    stop_events[json_pckt['seq_number'] % 5].clear()
 
     sendTimes.append(time.time())
     global timeoutSet
     if (json_pckt['seq_number'] == 0 and not timeoutSet):
         print("BEGINNING THREAD")
         timeoutSet = True
-        Thread(target=timeout,args=(socket, client_address, file_length, 5,)).start()
+        Thread(target=timeout,args=(socket, client_address, file_length, path, 5,)).start()
 
     
 
@@ -531,11 +384,6 @@ def main():
     if (len(sys.argv) != 6):
         usage()
 
-    # print('Host name: '+ str(socket.gethostbyname('google.com')))
-    #
-    # sys.exit(1)
-    # Interpret the argument
-    # python3 ringo.py S 100.0 john 90 90
     global flag
     flag = sys.argv[1]  # Getting a flag i.e) S, F, R
     local_port = sys.argv[2]  # Getting a local port i.e) 23222
@@ -611,17 +459,13 @@ def main():
     # Command Line User Interface Start here
     print ("\n")
 
-    # very hacky way to write data to file: open here, append later
-    # if flag == "R":
-    #     f = open('newText.txt', 'w')
-
     print("My address:\t" + str(routes[0][1][0]))   #this will always be the current ringo
     print("Next address:\t" + str(routes[0][1][1])) #next ringo in optimal ring
     
     nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
     nextPort = int(routes[0][1][1].split(",")[1][:5])
     global nextAddress
-    nextAddress = (nextName, nextPort)
+    nextAddress = (nextName, nextPort)  # this is the next address 
     # nextAddress = ('127.0.0.1',6000)
 
     while True:
@@ -653,7 +497,7 @@ def main():
             else:
                 print("FILENAME:\t" + text.split()[1])
                 file_name = text.split()[1]
-                f = open(file_name, 'r')
+                f = open(file_name)
                 data = f.read()
 
                 idx = 0
@@ -661,13 +505,9 @@ def main():
                     file_text.append(data[idx:idx+SEND_BUF])
                     idx += SEND_BUF
                 file_text.append(data[idx:])
-                # print("INIT LENGTH OF FILE_TEXT:\t" + str(len(file_text)))
                 file_length = len(file_text)
 
                 f.close()
-                # print(len(file_text))
-                # sys.exit(1)
-                destination = (poc_name, int(poc_port))
 
                 init_window(server.socket, nextAddress, file_name, file_length)
 
