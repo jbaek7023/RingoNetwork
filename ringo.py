@@ -142,7 +142,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
         elif keyword == "file":
             print("received message data from " + str(self.client_address))
 
-            data = json_obj['data']
+            data = json_obj['data'].encode('ISO-8859-1')
             incoming_seq_number = json_obj['seq_number']
             filename = json_obj['filename']
             file_length = json_obj['file_length']
@@ -160,7 +160,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     'ack_number': incoming_seq_number,
                     'filename' : filename,
                     'file_length': file_length,
-                    'data': data,
+                    # 'data': data,
                     })
 
             if incoming_seq_number == expected_packet:
@@ -192,7 +192,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     init_window(socketo, nextAddress, filename, file_length)
 
         elif keyword == "file_ack":
-            data = json_obj['data']
+            # data = json_obj['data']
             ack_number = json_obj['ack_number']
             filename = json_obj['filename']
             file_length = json_obj['file_length']
@@ -227,7 +227,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                             'filename': filename,
                             'file_length':file_length,
                             'seq_number': pack_sequence,
-                            'data': file_text[pack_sequence]
+                            'data': file_text[pack_sequence].encode('ISO-8859-1')
                             })
                     print('adding to window...')                
 
@@ -269,7 +269,7 @@ def init_window(server, peer_address, filename, file_length):
             'filename': filename,
             'file_length': file_length, #length in packets
             'seq_number': pack_sequence,
-            'data': file_text[expected_packet_ack+idx]
+            'data': file_text[idx].decode('ISO-8859-1')
             })
         window.append(new_pckt)
 
@@ -289,6 +289,9 @@ def send_window(sock_server, client_address, file_length):
         
         send_packet(sock_server, client_address, file_length, packet)
 
+'''
+Send packet data
+'''
 def send_packet(socket, client_address, file_length, packet):
     json_pckt = json.loads(packet) # stringify for printing
     print("sending packet\t" + str(json_pckt['seq_number']))
@@ -497,7 +500,7 @@ def main():
             else:
                 print("FILENAME:\t" + text.split()[1])
                 file_name = text.split()[1]
-                f = open(file_name)
+                f = open(file_name, "rb")
                 data = f.read()
 
                 idx = 0
