@@ -49,3 +49,26 @@ jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py F 9020 127.0.0.1 
 
 
 # Running five Ringos on network labs
+
+
+# Running two Ringos to send file
+
+python3 ringo.py R 8080 0 0 2
+python3 ringo.py S 7070 127.0.0.1 8080 2
+
+In the Sending Ringo, type this command:
+
+> send text.txt
+
+# Running five Ringos to send file
+
+python3 ringo.py R 8080 0 0 5
+python3 ringo.py S 7070 127.0.0.1 8080 5
+python3 ringo.py S 6060 127.0.0.1 7070 5
+python3 ringo.py S 5050 127.0.0.1 6060 5
+python3 ringo.py S 4040 127.0.0.1 5050 5
+
+In the Sending Ringo, type this command:
+
+> send text.txt
+
