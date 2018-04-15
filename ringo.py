@@ -77,7 +77,7 @@ def timeout(server, client_address, file_length, this_path, timeout):
 def writeToFile(filename, file_length):
     print("writing file " + str(filename))
 
-    f = open(filename, 'w')
+    f = open(filename, 'wb')
     global file_text
     for idx in range(file_length):
       f.write(file_text[idx])
@@ -227,7 +227,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                             'filename': filename,
                             'file_length':file_length,
                             'seq_number': pack_sequence,
-                            'data': file_text[pack_sequence].encode('ISO-8859-1')
+                            'data': file_text[pack_sequence].decode('ISO-8859-1')
                             })
                     print('adding to window...')                
 
@@ -294,14 +294,20 @@ Send packet data
 '''
 def send_packet(socket, client_address, file_length, packet):
     json_pckt = json.loads(packet) # stringify for printing
+    sequence = json_pckt['seq_number']
     print("sending packet\t" + str(json_pckt['seq_number']))
     print("sending to " + str(client_address))
+
     socket.sendto(
         packet.encode('utf-8'),
         client_address
         )
 
-    sendTimes.append(time.time())
+    if (sequence < len(sendTimes)):  # check if packet was already sent
+        sendTimes[sequence] = time.time()
+    else:
+        sendTimes.append(time.time())
+
     global timeoutSet
     if (json_pckt['seq_number'] == 0 and not timeoutSet):
         print("BEGINNING THREAD")
