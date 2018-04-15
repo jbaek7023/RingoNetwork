@@ -45,7 +45,7 @@ jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 7020 127.0.0.1 
 jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 7000 127.0.0.1 7020 5
 jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py F 9020 127.0.0.1 7000 5
 
-# Running two Ringos on network labs
+# Running two Ringos from the GT lab computer (ssh server)
 
 
-# Running five Ringos on network labs
+# Running five Ringos from the GT lab computer (ssh server)

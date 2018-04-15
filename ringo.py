@@ -236,12 +236,15 @@ def main():
     # Peer Discover Here. #
     host = "127.0.0.1"
     HOST = "127.0.0.1"
+
+
     # host = socket.gethostbyname(socket.gethostname())
     HOST, PORT = host, int(local_port)
     server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
     server_thread = Thread(target=server.serve_forever, args=())
     server_thread.daemon = False
     server_thread.start()
+    print('WELCOME TO RINGO')
     print('WELCOME TO RINGO')
 
     while len(peers) < int(num_of_ringos):
