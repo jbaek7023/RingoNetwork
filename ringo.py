@@ -238,10 +238,10 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                     send_packet(socketo, self.client_address, file_length, new_pckt)
 
-                    # Signal to user that it is safe to input again
-                    if (pack_sequence == file_length-1):
-                        print("File fully sent!")
-                        print(">")
+            # Signal to user that it is safe to input again
+            if (ack_number == file_length-1):
+                print("File fully sent!")
+                print(">")
 
 
 
