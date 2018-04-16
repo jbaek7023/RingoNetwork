@@ -37,6 +37,8 @@ forwarded = False   # for use in forwarding
 sendTimes = []  # the times at which packets are sent
 nextAddress = ()    # the neighbor to which a message is to be forwarded
 
+stop_event = Event();
+
 
 def usage():
     print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
@@ -61,24 +63,42 @@ def check_numeric(val, arg):
 
 
 timeoutSet = False
-def timeout(server, client_address, file_length, timeout):
-
-    global path
-    while(expected_packet_ack < file_length):
+def timeout(server, client_address, filelength, timeout):
+    
+    while(True):
+        if stop_event.is_set():
+            global expected_packet_ack
+            expected_packet_ack = 0
+            global pack_sequence
+            pack_sequence = 0
+            global file_length
+            file_length = 0;
+            break;
         time.sleep(1)
         now = time.time()
-        print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
-        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + timeout):
+        print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(filelength))
+        if (expected_packet_ack < filelength and now >= sendTimes[expected_packet_ack] + timeout):
             print(expected_packet_ack)
-            send_window(server, client_address, file_length)
+            send_window(server, client_address, filelength)
 
-def writeToFile(filename, file_length):
+def writeToFile(filename, file_data, file_length):
     print("writing file " + str(filename))
 
     f = open(filename, 'wb')
-    global file_text
+    
+    for idx in range(file_length):
+      f.write(file_data[idx])
+   
+
+def writeToTextFile(filename, file_data, file_length):
+    print("writing file " + str(filename))
+
+    f = open(filename, 'w')
     for idx in range(file_length):
       f.write(file_text[idx])
+    # file_text = []  # clear file_text for future use
+    # print('file_text is now:\t')
+    # print(file_text)
 
 
 
@@ -140,16 +160,20 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
         elif keyword == "file":
             print("received message data from " + str(self.client_address))
 
-            data = json_obj['data'].encode('ISO-8859-1')
             incoming_seq_number = json_obj['seq_number']
             filename = json_obj['filename']
             file_length = json_obj['file_length']
+            
+            if (filename[-4:] == '.txt'):   # text files are special
+                data = json_obj['data']
+            
+            if (filename[-4:] != '.txt'):   # text files are special
+                data = json_obj['data'].encode('ISO-8859-1')
+            
             print("seq numb\t" + str(incoming_seq_number))
 
 
             global expected_packet
-            global been_tested1
-            global been_tested2
 
             json_pckt = ""
 
@@ -177,8 +201,15 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 '''
                 Write file at receiver
                 '''
+                file_data = file_text
                 if flag == 'R':
-                    writeToFile(filename, file_length)
+                    if (filename[-4:] == '.txt'):
+                        writeToTextFile(filename, file_data, file_length)
+                    else:
+                        writeToFile(filename, file_data, file_length)
+                     # clear file_text for future use 
+                    global expected_packet
+                    expected_packet = 0
 
                 '''
                 Forward file
@@ -202,11 +233,9 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
             if ack_number != expected_packet_ack:
                 print('UNEXPECTED ACK RECEIVED')
-                # send_window(socketo, self.client_address)
             else:
 
                 global expected_packet_ack
-                global stop_event
 
                 expected_packet_ack += 1
 
@@ -216,33 +245,52 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 print(str(len(window)))
 
                 print("FILE SEQUENCE NUMBER:\t" + str(pack_sequence))
-                # print("length of file_text:\t" + str(len(file_text)))
 
-                if pack_sequence < len(file_text):
+                # Signal to user that it is safe to input again
+                if (ack_number == file_length-1):
+                    print("File fully sent!")
+                    print(">")
+                    global stop_event
+                    stop_event.set()
+                    # global timeoutSet
+                    # timeoutSet = False
+                    # expected_packet_ack = 0
+                    # global pack_sequence
+                    # pack_sequence = 0
+                    # global file_length
+                    # file_length = 0;
+
                     
-                    new_pckt = json.dumps({
-                            'command': 'file',
-                            'filename': filename,
-                            'file_length':file_length,
-                            'seq_number': pack_sequence,
-                            'data': file_text[pack_sequence].decode('ISO-8859-1')
-                            })
-                    print('adding to window...')                
+                    # global file_text
+                    # file_text = []
 
 
-                    window.append(new_pckt)
-                    print(str(len(window)))
+                else :
+                    if pack_sequence < len(file_text):
+
+                        if (filename[-4:] == '.txt'):   # text files are special
+                            data = file_text[pack_sequence]
+
+                        if (filename[-4:] != '.txt'):   # text files are special
+                            data = file_text[pack_sequence].decode('ISO-8859-1')
+
+                        new_pckt = json.dumps({
+                                'command': 'file',
+                                'filename': filename,
+                                'file_length':file_length,
+                                'seq_number': pack_sequence,
+                                'data': data
+                                })
+                        print('adding to window...')                
 
 
-                    pack_sequence += 1
+                        window.append(new_pckt)
+                        print(str(len(window)))
 
-                    send_packet(socketo, self.client_address, file_length, new_pckt)
 
-                    # Signal to user that it is safe to input again
-                    if (pack_sequence == file_length-1):
-                        print("File fully sent!")
-                        print(">")
+                        pack_sequence += 1
 
+                        send_packet(socketo, self.client_address, file_length, new_pckt)
 
 
         else:
@@ -253,28 +301,42 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 """
 initialize packet window
 """
-def init_window(server, peer_address, filename, file_length):
+def init_window(server, client_address, filename, file_length):
     print("I want to send your message!")
 
 
     global pack_sequence
 
     idx = 0
+    
     while idx < len(file_text) and idx < PACKETS_WINDOW_SIZE:   # stops if file_text is smaller than a window
         print(pack_sequence)
+        
+        if (filename[-4:] == '.txt'):
+            data = file_text[idx]
+
+        if (filename[-4:] != '.txt'):   # text files are special
+            # print('this is still a text file')
+            data = file_text[idx].decode('ISO-8859-1')
+
         new_pckt = json.dumps({
             'command': 'file',
             'filename': filename,
             'file_length': file_length, #length in packets
             'seq_number': pack_sequence,
-            'data': file_text[idx].decode('ISO-8859-1')
+            'data': data
             })
         window.append(new_pckt)
 
         pack_sequence += 1
         idx += 1
 
-    send_window(server, peer_address, file_length)
+    global stop_event
+    if not stop_event.is_set():
+        stop_event.set()
+        Thread(target=timeout,args=(socket, client_address, file_length, 5,)).start()
+
+    send_window(server, client_address, file_length)
 
 
 '''
@@ -305,13 +367,6 @@ def send_packet(socket, client_address, file_length, packet):
         sendTimes[sequence] = time.time()
     else:
         sendTimes.append(time.time())
-
-    global timeoutSet
-    if (json_pckt['seq_number'] == 0 and not timeoutSet):
-        print("BEGINNING THREAD")
-        timeoutSet = True
-        Thread(target=timeout,args=(socket, client_address, file_length, 5,)).start()
-
     
 
 
@@ -504,15 +559,29 @@ def main():
             else:
                 print("FILENAME:\t" + text.split()[1])
                 file_name = text.split()[1]
-                f = open(file_name, "rb")
+
+                if file_name[-4:] == '.txt':    # text files are special
+                    print('this is a text file')
+                    f = open(file_name, "r")
+                else:
+                    f = open(file_name, "rb")
                 data = f.read()
 
                 idx = 0
+                
+                file = []
                 while (idx + SEND_BUF) < len(data):
-                    file_text.append(data[idx:idx+SEND_BUF])
+                    file.append(data[idx:idx+SEND_BUF])
                     idx += SEND_BUF
-                file_text.append(data[idx:])
+                file.append(data[idx:])
+
+                global file_text
+                file_text = file
+                
                 file_length = len(file_text)
+
+                print (file_length)
+
 
                 f.close()
 
