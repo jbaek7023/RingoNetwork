@@ -30,7 +30,7 @@ pack_sequence = 0 # current sequence number
 expected_packet = 0 # for use with receiving message
 expected_packet_ack = 0
 window = [] # packet window
-file_text = []      # body of file to send
+file_chunks = []      # body of file to send
 
 forwarded = False   # for use in forwarding
 
@@ -61,21 +61,28 @@ def check_numeric(val, arg):
 
 
 timeoutSet = False
+
+'''
+Timeout function; loops while we still expect more acks, then resets the globals
+    to receive a future file
+'''
 def timeout(server, client_address, file_length, timeout):
     
     print('TIMEOUT BEGINS HERE')
     while(True):
         if (expected_packet_ack >= file_length):    # implies we've received ack for last packet
+            # reset global variables
             print('breaking timer')
             global timeoutSet
-            timeoutSet = False
-            print('timeoutSet is ' + str(timeoutSet))
-            global file_text
-            file_text = []
             global expected_packet_ack
             global pack_sequence
+            global file_chunks
+
+            timeoutSet = False
+            file_chunks = []
             expected_packet_ack = 0
             pack_sequence = 0
+
             break;
         
         time.sleep(1)
@@ -85,25 +92,20 @@ def timeout(server, client_address, file_length, timeout):
             print(expected_packet_ack)
             send_window(server, client_address, file_length)
 
+
+'''
+Used by Receiving Ringo to write the transferred file 
+'''
 def writeToFile(filename, file_length):
     print("writing file " + str(filename))
 
     f = open(filename, 'wb')
-    global file_text
+    global file_chunks
     for idx in range(file_length):
-      f.write(file_text[idx])
+      f.write(file_chunks[idx])
     global expected_packet
     expected_packet = 0
-    file_text = []
-
-def forwardFile(filename, file_length):
-    global file_text
-    global expected_packet
-    expected_packet = 0
-    file_text = []
-    print("I'm forwarding this file!")
-    global nextAddress
-    init_window(socketo, nextAddress, filename, file_length)
+    file_chunks = []
 
 
 class MyUDPHandler(socketserver.BaseRequestHandler):
@@ -161,7 +163,8 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             if ttl > 0:
                 socketo.sendto(new_rtt_peer_data.encode('utf-8'), self.client_address)           
 
-        elif keyword == "file":
+        elif keyword == "file": # this is part of the message file
+
             print("received message data from " + str(self.client_address))
 
             data = json_obj['data'].encode('ISO-8859-1')
@@ -188,7 +191,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
 
             if incoming_seq_number == expected_packet:  # if not expeceted, let the sender timeout
-                file_text.append(data)
+                file_chunks.append(data)
 
                 expected_packet += 1
 
@@ -218,7 +221,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                         global nextAddress
                         init_window(socketo, nextAddress, filename, file_length)
 
-        elif keyword == "file_ack":
+        elif keyword == "file_ack": # this is an ack for the piece of the file we sent
             # data = json_obj['data']
             ack_number = json_obj['ack_number']
             filename = json_obj['filename']
@@ -245,16 +248,16 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 print(str(len(window)))
 
                 print("FILE SEQUENCE NUMBER:\t" + str(pack_sequence))
-                # print("length of file_text:\t" + str(len(file_text)))
+                # print("length of file_chunks:\t" + str(len(file_chunks)))
 
-                if pack_sequence < len(file_text):
+                if pack_sequence < len(file_chunks):
                     
                     new_pckt = json.dumps({
                             'command': 'file',
                             'filename': filename,
                             'file_length':file_length,
                             'seq_number': pack_sequence,
-                            'data': file_text[pack_sequence].decode('ISO-8859-1')
+                            'data': file_chunks[pack_sequence].decode('ISO-8859-1')
                             })
                     print('adding to window...')                
 
@@ -289,14 +292,14 @@ def init_window(server, peer_address, filename, file_length):
     global pack_sequence
 
     idx = 0
-    while idx < len(file_text) and idx < PACKETS_WINDOW_SIZE:   # stops if file_text is smaller than a window
+    while idx < len(file_chunks) and idx < PACKETS_WINDOW_SIZE:   # stops if file_chunks is smaller than a window
         print(pack_sequence)
         new_pckt = json.dumps({
             'command': 'file',
             'filename': filename,
             'file_length': file_length, #length in packets
             'seq_number': pack_sequence,
-            'data': file_text[idx].decode('ISO-8859-1')
+            'data': file_chunks[idx].decode('ISO-8859-1')
             })
         window.append(new_pckt)
 
@@ -436,10 +439,6 @@ def main():
     check_numeric(num_of_ringos, "N")
 
     # Peer Discover Here. #
-    host = "127.0.0.1"
-    HOST = "127.0.0.1"
-    # host = socket.gethostbyname(socket.gethostname())
-    # HOST, PORT = host, int(local_port)
     HOST, PORT = socket.gethostbyname(socket.gethostname()), int(local_port)
     server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
     server_thread = Thread(target=server.serve_forever, args=())
@@ -546,12 +545,13 @@ def main():
 
                 f.close()
 
-                global file_text
-                file_text = file
-                file_length = len(file_text)
-
                 global expected_packet_ack
                 global pack_sequence
+                global file_chunks
+
+                # iniitialize variables for file the sending
+                file_chunks = file
+                file_length = len(file_chunks)
                 expected_packet_ack = 0
                 pack_sequence = 0
 
