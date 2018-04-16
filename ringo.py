@@ -65,11 +65,17 @@ def timeout(server, client_address, file_length, timeout):
     
     print('TIMEOUT BEGINS HERE')
     while(True):
-        if (expected_packet_ack >= file_length):
+        if (expected_packet_ack >= file_length):    # implies we've received ack for last packet
             print('breaking timer')
             global timeoutSet
             timeoutSet = False
             print('timeoutSet is ' + str(timeoutSet))
+            global file_text
+            file_text = []
+            global expected_packet_ack
+            global pack_sequence
+            expected_packet_ack = 0
+            pack_sequence = 0
             break;
         
         time.sleep(1)
@@ -90,6 +96,14 @@ def writeToFile(filename, file_length):
     expected_packet = 0
     file_text = []
 
+def forwardFile(filename, file_length):
+    global file_text
+    global expected_packet
+    expected_packet = 0
+    file_text = []
+    print("I'm forwarding this file!")
+    global nextAddress
+    init_window(socketo, nextAddress, filename, file_length)
 
 
 class MyUDPHandler(socketserver.BaseRequestHandler):
@@ -169,6 +183,9 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     # 'data': data,
                     })
 
+            if incoming_seq_number != expected_packet: 
+                print('Unexpected packet: ' + str(incoming_seq_number))
+
 
             if incoming_seq_number == expected_packet:  # if not expeceted, let the sender timeout
                 file_text.append(data)
@@ -196,6 +213,8 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     global forwarded
                     if flag == 'F' and forwarded == False:
                         print("I'm forwarding this file!")
+                        global expected_packet
+                        expected_packet = 0
                         global nextAddress
                         init_window(socketo, nextAddress, filename, file_length)
 
