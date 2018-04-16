@@ -62,9 +62,16 @@ def check_numeric(val, arg):
 
 timeoutSet = False
 def timeout(server, client_address, file_length, timeout):
-
-    global path
-    while(expected_packet_ack < file_length):
+    
+    print('TIMEOUT BEGINS HERE')
+    while(True):
+        if (expected_packet_ack >= file_length):
+            print('breaking timer')
+            global timeoutSet
+            timeoutSet = False
+            print('timeoutSet is ' + str(timeoutSet))
+            break;
+        
         time.sleep(1)
         now = time.time()
         print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
@@ -79,6 +86,9 @@ def writeToFile(filename, file_length):
     global file_text
     for idx in range(file_length):
       f.write(file_text[idx])
+    global expected_packet
+    expected_packet = 0
+    file_text = []
 
 
 
@@ -144,12 +154,10 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             incoming_seq_number = json_obj['seq_number']
             filename = json_obj['filename']
             file_length = json_obj['file_length']
-            print("seq numb\t" + str(incoming_seq_number))
+            print("seq numb\t" + str(incoming_seq_number) + " and I want " + str(expected_packet))
 
 
             global expected_packet
-            global been_tested1
-            global been_tested2
 
             json_pckt = ""
 
@@ -161,33 +169,35 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     # 'data': data,
                     })
 
-            if incoming_seq_number == expected_packet:
+
+            if incoming_seq_number == expected_packet:  # if not expeceted, let the sender timeout
                 file_text.append(data)
 
                 expected_packet += 1
 
-            socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
+                print('sending ack ' + str(incoming_seq_number) + "; still want all " + str(file_length))
+                socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
 
-            # Signal to user that it is safe to input again
-            if (incoming_seq_number == file_length-1):
-                print("File fully received!")
-                print(">")
-                print("flag: " + flag)
+                # Signal to user that it is safe to input again
+                if (incoming_seq_number == file_length-1):
+                    print("File fully received!")
+                    print(">")
+                    print("flag: " + flag)
 
-                '''
-                Write file at receiver
-                '''
-                if flag == 'R':
-                    writeToFile(filename, file_length)
+                    '''
+                    Write file at receiver
+                    '''
+                    if flag == 'R':
+                        writeToFile(filename, file_length)
 
-                '''
-                Forward file
-                '''
-                global forwarded
-                if flag == 'F' and forwarded == False:
-                    print("I'm forwarding this file!")
-                    global nextAddress
-                    init_window(socketo, nextAddress, filename, file_length)
+                    '''
+                    Forward file
+                    '''
+                    global forwarded
+                    if flag == 'F' and forwarded == False:
+                        print("I'm forwarding this file!")
+                        global nextAddress
+                        init_window(socketo, nextAddress, filename, file_length)
 
         elif keyword == "file_ack":
             # data = json_obj['data']
@@ -507,14 +517,25 @@ def main():
                 f = open(file_name, "rb")
                 data = f.read()
 
+                file = []
+
                 idx = 0
                 while (idx + SEND_BUF) < len(data):
-                    file_text.append(data[idx:idx+SEND_BUF])
+                    file.append(data[idx:idx+SEND_BUF])
                     idx += SEND_BUF
-                file_text.append(data[idx:])
-                file_length = len(file_text)
+                file.append(data[idx:])
 
                 f.close()
+
+                global file_text
+                file_text = file
+                file_length = len(file_text)
+
+                global expected_packet_ack
+                global pack_sequence
+                expected_packet_ack = 0
+                pack_sequence = 0
+
 
                 init_window(server.socket, nextAddress, file_name, file_length)
 
