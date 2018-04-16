@@ -439,7 +439,8 @@ def main():
     host = "127.0.0.1"
     HOST = "127.0.0.1"
     # host = socket.gethostbyname(socket.gethostname())
-    HOST, PORT = host, int(local_port)
+    # HOST, PORT = host, int(local_port)
+    HOST, PORT = socket.gethostbyname(socket.gethostname()), int(local_port)
     server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
     server_thread = Thread(target=server.serve_forever, args=())
     server_thread.daemon = False
@@ -502,7 +503,6 @@ def main():
     nextPort = int(routes[0][1][1].split(",")[1][:5])
     global nextAddress
     nextAddress = (nextName, nextPort)  # this is the next address 
-    # nextAddress = ('127.0.0.1',6000)
 
     while True:
         print('Enter Commands (show-matrix, show-ring or disconnect)')
