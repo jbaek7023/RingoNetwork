@@ -16,6 +16,7 @@ import time
 import json
 import timeit
 import ast
+import uuid
 # import socket
 
 
@@ -26,6 +27,11 @@ peers = {}
 rtt_matrix = {}
 routes = [] # for use in findRing()
 
+# Variables for Keep Alive
+seq_ids = {}
+seq_id = 0
+
+# Variables for file sending
 pack_sequence = 0 # current sequence number
 expected_packet = 0 # for use with receiving message
 expected_packet_ack = 0
@@ -38,51 +44,6 @@ sendTimes = []  # the times at which packets are sent
 nextAddress = ()    # the neighbor to which a message is to be forwarded
 
 path = "optimal" # may be set to optimal or opposite
-
-
-def usage():
-    print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
-    sys.exit(1)
-
-def check_flag(role):
-    if (sys.argv[1]=="S"):
-        role = "S"
-    elif (sys.argv[1]=="F"):
-        role = "F"
-    elif (sys.argv[1]=="R"):
-        role = "R"
-    else:
-        usage()
-
-def check_numeric(val, arg):
-    try:
-        value = int(val)
-    except ValueError:
-        print(arg + " must be an int")
-        sys.exit(1)
-
-
-timeoutSet = False
-def timeout(server, client_address, file_length, this_path, timeout):
-
-    global path
-    while(expected_packet_ack < file_length and this_path == path):
-        time.sleep(1)
-        now = time.time()
-        print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
-        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + timeout):
-            print(expected_packet_ack)
-            send_window(server, client_address, file_length)
-
-def writeToFile(filename, file_length):
-    print("writing file " + str(filename))
-
-    f = open(filename, 'wb')
-    global file_text
-    for idx in range(file_length):
-      f.write(file_text[idx])
-
-
 
 class MyUDPHandler(socketserver.BaseRequestHandler):
     def handle(self):
@@ -98,6 +59,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
             for key in peers_response:
                 peers[key] = 1
+
             new_peer_data = json.dumps({
                 'command': 'peer_discovery',
                 'peers': peers,
@@ -106,6 +68,26 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
             if ttl > 0:
                 socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
+
+        elif keyword =="keepalive":
+            ttl = json_obj['ttl'] - 1
+            created = json_obj['created']
+            seq_id = json_obj['seq_id']
+
+            kl_data = json.dumps({
+                'seq_id': seq_id,
+                'command': 'keepalive',
+                'created': created,
+                'ttl': ttl
+            })
+
+            if ttl > 0: # received!! ttl == 1
+                socketo.sendto(kl_data.encode('utf-8'), self.client_address)
+            if ttl == 0:
+                # I got this packet. the address is alive!
+                # add to sequence ids
+                seq_ids.pop(seq_id, None)
+                rtt_matrix[item] =
         elif keyword == "find_rtt":
             rtt_count = json_obj['rtt_count']
             rtt_created = json_obj['created']
@@ -128,13 +110,12 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             # Receive a distance vector
             peers_response = json_obj['peers']
             ttl = json_obj['ttl'] - 1
-
             rtt_matrix[str(self.client_address)] = peers_response
 
             new_rtt_peer_data = json.dumps({
                 'command': 'send_rtt_vector',
                 'peers': peers,
-                'ttl': ttl
+                'ttl': ttl,
             })
             if ttl > 0:
                 socketo.sendto(new_rtt_peer_data.encode('utf-8'), self.client_address)
@@ -147,7 +128,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             filename = json_obj['filename']
             file_length = json_obj['file_length']
             print("seq numb\t" + str(incoming_seq_number))
-
 
             global expected_packet
             global been_tested1
@@ -192,36 +172,25 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     init_window(socketo, nextAddress, filename, file_length)
 
         elif keyword == "file_ack":
-            # data = json_obj['data']
             ack_number = json_obj['ack_number']
             filename = json_obj['filename']
             file_length = json_obj['file_length']
             print("expected ack\t" + str(expected_packet_ack))
             print("ack numb received\t" + str(ack_number))
-
-
             global pack_sequence
 
             if ack_number != expected_packet_ack:
                 print('UNEXPECTED ACK RECEIVED')
                 # send_window(socketo, self.client_address)
             else:
-
                 global expected_packet_ack
                 global stop_event
-
                 expected_packet_ack += 1
-
                 print("deleting from window...")
-
                 del window[0]
                 print(str(len(window)))
-
                 print("FILE SEQUENCE NUMBER:\t" + str(pack_sequence))
-                # print("length of file_text:\t" + str(len(file_text)))
-
                 if pack_sequence < len(file_text):
-
                     new_pckt = json.dumps({
                             'command': 'file',
                             'filename': filename,
@@ -230,35 +199,64 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                             'data': file_text[pack_sequence].decode('ISO-8859-1')
                             })
                     print('adding to window...')
-
-
                     window.append(new_pckt)
                     print(str(len(window)))
-
-
                     pack_sequence += 1
-
                     send_packet(socketo, self.client_address, file_length, new_pckt)
-
                     # Signal to user that it is safe to input again
                     if (pack_sequence == file_length-1):
                         print("File fully sent!")
                         print(">")
-
-
-
         else:
             print(keyword)
             print('Invalid Packet')
 
+def usage():
+    print ("Usage: python3 ringo.py <flag> <local-port> <PoC-name> <PoC-port> <N>")
+    sys.exit(1)
+
+def check_flag(role):
+    if (sys.argv[1]=="S"):
+        role = "S"
+    elif (sys.argv[1]=="F"):
+        role = "F"
+    elif (sys.argv[1]=="R"):
+        role = "R"
+    else:
+        usage()
+
+def check_numeric(val, arg):
+    try:
+        value = int(val)
+    except ValueError:
+        print(arg + " must be an int")
+        sys.exit(1)
+
+
+timeoutSet = False
+def timeout(server, client_address, file_length, this_path, timeout):
+
+    global path
+    while(expected_packet_ack < file_length and this_path == path):
+        time.sleep(1)
+        now = time.time()
+        print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
+        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + timeout):
+            print(expected_packet_ack)
+            send_window(server, client_address, file_length)
+
+def writeToFile(filename, file_length):
+    print("writing file " + str(filename))
+
+    f = open(filename, 'wb')
+    global file_text
+    for idx in range(file_length):
+      f.write(file_text[idx])
 
 """
 initialize packet window
 """
 def init_window(server, peer_address, filename, file_length):
-    print("I want to send your message!")
-
-
     global pack_sequence
 
     idx = 0
@@ -314,13 +312,10 @@ def send_packet(socket, client_address, file_length, packet):
         timeoutSet = True
         Thread(target=timeout,args=(socket, client_address, file_length, path, 5,)).start()
 
-
-
-
 def send_rtt_vector(server, peers, poc_name, poc_port):
     # We're sending RTT when it's the first one.
     poc_address = (poc_name, int(poc_port))
-    # peers[str(poc_address)] = 0  # We don't know the RTT btw this ringo and PoC yet
+
     peer_data = json.dumps({
         'command': 'send_rtt_vector',
         'peers': peers,
@@ -362,8 +357,6 @@ def findrtt(server, peer_name, peer_port):
         peer_address
         )
 
-
-
 def findRing(node, cities, path, distance):
     # Add way point
     path.append(node)
@@ -376,6 +369,7 @@ def findRing(node, cities, path, distance):
     # add path from last to first city and return.
     if (len(cities) == len(path)) and (path[0] in cities[path[-1]]):
         global routes
+        routes = []
         path.append(path[0])
         distance += cities[path[-2]][path[0]]
         routes.append([distance, path])
@@ -386,31 +380,78 @@ def findRing(node, cities, path, distance):
         if (city not in path) and (node in cities[city]):
             findRing(city, dict(cities), list(path), distance)
 
+def churn_tout(server, created, item, seq_id, local):
+    while True:
+        # It's not in the sequence lists! (We got the packet back)
+        if not seq_id in seq_ids:
+            break # Break timeout... Exit the Thread
+        else:
+            now = time.time()
+            if now - created > 3:
+                # Time Out Call!
+                # Remove the addres from RTT Matrix
+                rtt_matrix.pop(item, None)
+                # Find Optimal Ring
+                findRing(local, rtt_matrix, [], 0)
+                break #Break the Thread
+        time.sleep(1)
 
+def churn(server, item, seq_id, local):
+    while True:
+        # Keep Alive works until the program termiantes
+        kl_name =  ast.literal_eval(item)[0]
+        kl_port =  ast.literal_eval(item)[1]
+        kl_address = (kl_name, int(kl_port))
+        created = time.time()
+        # Generate Sequence Number
+        seq_id = str(uuid.uuid4())
+
+        # add to seq_ids list
+        seq_ids[seq_id] = 1
+
+        kl_data = json.dumps({
+            'seq_id': seq_id,
+            'command': 'keepalive',
+            'created': created,
+            'ttl': 2, # goes through one time
+            })
+
+        server.socket.sendto(
+            kl_data.encode('utf-8'),
+            kl_address
+            )
+
+        # Make another thread
+        Thread(target=churn_tout, args=(server, created, item, seq_id, local)).start()
+        time.sleep(0.5)
+
+def keep_alive(server, seq_id, local):
+    # Send Packets to every node
+    for item in list(peers.keys()):
+        # For each peers, we open keep_alive thread
+        Thread(target=churn, args=(server, item, seq_id, local)).start()
 
 def main():
-
     if (len(sys.argv) != 6):
         usage()
-
     global flag
     flag = sys.argv[1]  # Getting a flag i.e) S, F, R
     local_port = sys.argv[2]  # Getting a local port i.e) 23222
     poc_name = sys.argv[3]  # Getting the port name i.e) networklab3.cc.gatech.edu
     poc_port = sys.argv[4]  # Getting the port number i.e) 8080 or 13445
     global num_of_ringos
+    global current_num_of_ringos
     num_of_ringos = sys.argv[5]  # Getting the number of ringos i.e) 5
-
-    # Define RTT Table
-    # Checking if we get the right argument types
+    current_num_of_ringos = num_of_ringos
     check_flag(flag)
     check_numeric(local_port, "local-port")
     check_numeric(poc_port, "PoC-port")
     check_numeric(num_of_ringos, "N")
-
+    global seq_id
     # Peer Discover Here. #
     host = "127.0.0.1"
     HOST = "127.0.0.1"
+
     # host = socket.gethostbyname(socket.gethostname())
     HOST, PORT = host, int(local_port)
     server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
@@ -419,6 +460,7 @@ def main():
     server_thread.start()
     print('WELCOME TO RINGO')
 
+    # Peer Discovery Start
     while len(peers) < int(num_of_ringos):
         # if it's not the first ringo,
         if poc_name != "0":
@@ -434,7 +476,9 @@ def main():
 
     time.sleep(1)
 
-    # Find RTT.
+    # Find RTT # Peer Discovery Here
+    # Open another thread->
+    # Keep Socket
     while True:
         if 1 not in peers.values():
             break
@@ -461,6 +505,9 @@ def main():
     local = str((HOST,PORT))
     findRing(local, rtt_matrix, [], 0)
     routes.sort()
+
+    keep_alive(server, seq_id, local)
+    # Thread(target=churn, args=(server, current_num_of_ringos, seq_num, 'path', 5,)).start()
 
     if len(routes) == 0:
         print ("FAILED TO FIND OPTIMAL RING")
