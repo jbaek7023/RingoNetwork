@@ -363,49 +363,54 @@ def findrtt(server, peer_name, peer_port):
         )
 
 def churn_tout(server, created, item, seq_id, local):
-    # Timeout for each peer route A to B
-    while True:
-        global non_active, rtt_matrix, num_active_node
-        # It's not in the sequence lists! (We got the packet back)
-        if not seq_id in seq_ids:
-            active_ringos[item] = 1
-            # Oh just found new active ringo (Inactive to Active)
-            if int(num_active_node) < len(active_ringos):
-                num_active_node = len(active_ringos)
-                # if non_active:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                num_active_node = int(num_of_ringos) - 1
-                non_active = False
-                # peer Discovery, Find RTT, Send RTT, Find Optimal Ring
-                start_peer_discovey()
-                start_finding_own_rtt()
-                start_finding_rtt_vectors()
-                routes = []
-                findRing(local, rtt_matrix, [], 0)
-                break # Break timeout... Exit the Thread
+    try:
 
-        else:
-            now = time.time()
-            if now - created > 3:
-                # Happens only few times
-
-                # Time Out Call!
-                # Remove the address from RTT Matrix
-                # if rtt_matrix[item] != None:
-                rtt_matrix[item] = None
-                # Remove it from active ringos
-                active_ringos.pop(item, None)
-                # decreases current num of ringos
-                non_active = True
-                if int(num_active_node) > len(active_ringos):
+        # Timeout for each peer route A to B
+        while True:
+            global non_active, rtt_matrix, num_active_node
+            # It's not in the sequence lists! (We got the packet back)
+            if not seq_id in seq_ids:
+                active_ringos[item] = 1
+                # Oh just found new active ringo (Inactive to Active)
+                if int(num_active_node) < len(active_ringos):
                     num_active_node = len(active_ringos)
+                    # if non_active:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    num_active_node = int(num_of_ringos) - 1
+                    non_active = False
+                    # peer Discovery, Find RTT, Send RTT, Find Optimal Ring
+                    start_peer_discovey()
+                    start_finding_own_rtt()
+                    start_finding_rtt_vectors()
                     routes = []
                     findRing(local, rtt_matrix, [], 0)
-                # Find Optimal Ring
+                    break # Break timeout... Exit the Thread
 
-                # print('found inactive node')
-                break #Break the Thread
-        time.sleep(1)
+            else:
+                now = time.time()
+                if now - created > 3:
+                    # Happens only few times
 
+                    # Time Out Call!
+                    # Remove the address from RTT Matrix
+                    # if rtt_matrix[item] != None:
+                    rtt_matrix[item] = None
+                    # Remove it from active ringos
+                    active_ringos.pop(item, None)
+                    # decreases current num of ringos
+                    non_active = True
+                    if int(num_active_node) > len(active_ringos):
+                        num_active_node = len(active_ringos)
+                        routes = []
+                        findRing(local, rtt_matrix, [], 0)
+                    # Find Optimal Ring
+
+                    # print('found inactive node')
+                    break #Break the Thread
+            time.sleep(1)
+    except:
+        server.server_close()
+        server.shutdown()
+        sys.exit()
 def churn(server, item, seq_id, local):
     while True:
         # Keep Alive works until the program termiantes
@@ -431,7 +436,9 @@ def churn(server, item, seq_id, local):
                 kl_address
                 )
         except OSError as e:
-            break
+            server.server_close()
+            server.shutdown()
+            sys.exit()
 
         # Make another thread
         Thread(target=churn_tout, args=(server, created, item, seq_id, local)).start()
@@ -615,17 +622,20 @@ def main():
             print("\n")
 
         elif text == 'disconnect':
-            print('Goody-bye!')
+            print('Good bye!')
             print ("\n")
+            # for kl_thread in kl_threads_list:
+            #     # kl_thread.join()
+            #     # kl_thread.daemon = True
             # server_thread.join()
             server.server_close()
             server.shutdown()
-            sys.exit(1)
+            sys.exit(0)
+            break
 
         elif text.split()[0] == 'offline':
             try:
                 duration = text.split()[1]
-
                 server.server_close()
                 server.shutdown()
                 print('server is offline; Will be back in '+duration+' seconds.')
@@ -635,7 +645,6 @@ def main():
                 break;
             except:
                 print('Bac Command')
-
 
         elif text.split()[0] == 'send':
             if (flag != 'S'):

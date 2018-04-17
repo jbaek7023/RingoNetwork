@@ -75,5 +75,3 @@ Enter Commands (show-matrix, show-ring or disconnect)
 > show-ring
 The Total Cost: 0.8004410266876221
 The Optimal Ring path: ["('130.207.107.12', 9000)", "('130.207.107.13', 9001)", "('130.207.107.14', 9002)", "('130.207.107.16', 9012)", "('130.207.107.15', 9010)", "('130.207.107.12', 9000)"]
-
-diff hex1 hex2 works!
