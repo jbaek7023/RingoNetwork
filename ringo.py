@@ -113,6 +113,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             # Receive a distance vector
             peers_response = json_obj['peers']
             ttl = json_obj['ttl'] - 1
+            global rtt_matrix
             rtt_matrix[str(self.client_address)] = peers_response
 
             new_rtt_peer_data = json.dumps({
@@ -361,57 +362,32 @@ def findrtt(server, peer_name, peer_port):
         peer_address
         )
 
-def findRing(node, cities, path, distance):
-    # Add way point
-    path.append(node)
-
-    # Delete None value cities
-    new_cities = cities.copy()
-    new_cities2 = cities.copy()
-    for key in new_cities:
-        if new_cities[key] == None:
-            new_cities2.pop(key, None)
-    cities = new_cities2
-
-    # Calculate path length from current to last node
-    if len(path) > 1:
-        distance += cities[path[-2]][node]
-
-    # If path contains all cities and is not a dead end,
-    # add path from last to first city and return.
-    if (len(cities) == len(path)) and (path[0] in cities[path[-1]]):
-        global routes
-        routes = []
-        path.append(path[0])
-        distance += cities[path[-2]][path[0]]
-        routes.append([distance, path])
-        return
-
-    # Fork paths for all possible cities not yet used
-    for city in cities:
-        if (city not in path) and (node in cities[city]):
-            findRing(city, dict(cities), list(path), distance)
-
-def churn_tout(server, created, item, seq_id, local, num_active_node):
+def churn_tout(server, created, item, seq_id, local):
+    # Timeout for each peer route A to B
     while True:
+        global non_active, rtt_matrix, num_active_node
         # It's not in the sequence lists! (We got the packet back)
         if not seq_id in seq_ids:
             active_ringos[item] = 1
-            global non_active, rtt_matrix
-            if len(active_ringos) == int(num_active_node):
+            # Oh just found new active ringo (Inactive to Active)
+            if int(num_active_node) < len(active_ringos):
                 num_active_node = len(active_ringos)
-                if non_active:
-                    non_active = False
-                    # peer Discovery, Find RTT, Send RTT, Find Optimal Ring
-                    start_peer_discovey()
-                    start_finding_own_rtt()
-                    start_finding_rtt_vectors()
-                    findRing(local, rtt_matrix, [], 0)
+                # if non_active:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                num_active_node = int(num_of_ringos) - 1
+                non_active = False
+                # peer Discovery, Find RTT, Send RTT, Find Optimal Ring
+                start_peer_discovey()
+                start_finding_own_rtt()
+                start_finding_rtt_vectors()
+                routes = []
+                findRing(local, rtt_matrix, [], 0)
                 break # Break timeout... Exit the Thread
 
         else:
             now = time.time()
             if now - created > 3:
+                # Happens only few times
+
                 # Time Out Call!
                 # Remove the address from RTT Matrix
                 # if rtt_matrix[item] != None:
@@ -419,15 +395,18 @@ def churn_tout(server, created, item, seq_id, local, num_active_node):
                 # Remove it from active ringos
                 active_ringos.pop(item, None)
                 # decreases current num of ringos
-                num_active_node = int(num_of_ringos) - 1
                 non_active = True
+                if int(num_active_node) > len(active_ringos):
+                    num_active_node = len(active_ringos)
+                    routes = []
+                    findRing(local, rtt_matrix, [], 0)
                 # Find Optimal Ring
-                findRing(local, rtt_matrix, [], 0)
+
                 # print('found inactive node')
                 break #Break the Thread
         time.sleep(1)
 
-def churn(server, item, seq_id, local, num_active_node):
+def churn(server, item, seq_id, local):
     while True:
         # Keep Alive works until the program termiantes
         kl_name =  ast.literal_eval(item)[0]
@@ -446,21 +425,26 @@ def churn(server, item, seq_id, local, num_active_node):
             'created': created,
             'ttl': 2, # goes through one time
             })
-
-        server.socket.sendto(
-            kl_data.encode('utf-8'),
-            kl_address
-            )
+        try:
+            server.socket.sendto(
+                kl_data.encode('utf-8'),
+                kl_address
+                )
+        except OSError as e:
+            break
 
         # Make another thread
-        Thread(target=churn_tout, args=(server, created, item, seq_id, local, num_active_node)).start()
+        Thread(target=churn_tout, args=(server, created, item, seq_id, local)).start()
         time.sleep(0.5)
 
-def keep_alive(server, seq_id, local, num_active_node):
+def keep_alive(server, seq_id, local):
     # Send Packets to every node
+    global kl_threads_list
     for item in list(peers.keys()):
         # For each peers, we open keep alive thread
-        Thread(target=churn, args=(server, item, seq_id, local, num_active_node)).start()
+        kl_thread = Thread(target=churn, args=(server, item, seq_id, local))
+        kl_threads_list.append(kl_thread)
+        kl_thread.start()
 
 def start_peer_discovey():
     global peers, num_of_ringos, poc_name, poc_port, server
@@ -502,10 +486,40 @@ def start_finding_rtt_vectors():
         if len(rtt_matrix) == int(num_of_ringos):
             break;
 
+def findRing(node, cities, path, distance):
+    # Add way point
+    path.append(node)
+
+    # Delete None value cities
+    new_cities = cities.copy()
+    new_cities2 = cities.copy()
+    for key in new_cities:
+        if new_cities[key] == None:
+            new_cities2.pop(key, None)
+    cities = new_cities2
+
+    # Calculate path length from current to last node
+    if len(path) > 1:
+        distance += cities[path[-2]][node]
+
+    # If path contains all cities and is not a dead end,
+    # add path from last to first city and return.
+    if (len(cities) == len(path)) and (path[0] in cities[path[-1]]):
+        global routes
+        path.append(path[0])
+        distance += cities[path[-2]][path[0]]
+        routes.append([distance, path])
+        return
+
+    # Fork paths for all possible cities not yet used
+    for city in cities:
+        if (city not in path) and (node in cities[city]):
+            findRing(city, dict(cities), list(path), distance)
+
 def main():
     if (len(sys.argv) != 6):
         usage()
-    global rtt_matrix, flag, poc_name, local, poc_port, num_of_ringos, current_num_of_ringos, seq_id, active_ringos, num_active_node, HOST, PORT, server
+    global offline, kl_threads_list, rtt_matrix, flag, poc_name, local, poc_port, num_of_ringos, current_num_of_ringos, seq_id, active_ringos, num_active_node, HOST, PORT, server, routes
     flag = sys.argv[1]  # Getting a flag i.e) S, F, R
     local_port = sys.argv[2]  # Getting a local port i.e) 23222
     poc_name = sys.argv[3]  # Getting the port name i.e) networklab3.cc.gatech.edu
@@ -516,6 +530,9 @@ def main():
     check_numeric(local_port, "local-port")
     check_numeric(poc_port, "PoC-port")
     check_numeric(num_of_ringos, "N")
+    kl_threads_list = []
+
+    offline = False
 
     # global non_active
     # non_active = False
@@ -554,17 +571,17 @@ def main():
 
     # Find Ring
     local = str((HOST,PORT))
+    routes = []
     findRing(local, rtt_matrix, [], 0)
     routes.sort()
 
-    keep_alive(server, seq_id, local, num_active_node)
+    keep_alive(server, seq_id, local)
 
     if len(routes) == 0:
         print ("FAILED TO FIND OPTIMAL RING")
 
     # Command Line User Interface Start here
     print ("\n")
-
     print("My address:\t" + str(routes[0][1][0]))   #this will always be the current ringo
     print("Next address:\t" + str(routes[0][1][1])) #next ringo in optimal ring
 
@@ -575,32 +592,29 @@ def main():
     # nextAddress = ('127.0.0.1',6000)
 
     while True:
-        print('Enter Commands (show-matrix, show-ring or disconnect)')
+        print('Enter Commands (show-matrix, show-ring, offline [seconds], file [], or disconnect)')
         text = input('> ')
 
         if text == 'show-matrix':
             print(json.dumps(rtt_matrix, indent=2, sort_keys=True))
             # print(rtt_matrix)
             print ("\n")
-        if text == 'peers':
+        elif text == 'peers':
             print(peers)
             # print(rtt_matrix)
             print ("\n")
 
-        if text.split()[0] == 'offline':
-            duration = text.split()[1]
-            print('Sleeping')
-            time.sleep(int(duration))
-            print('Node got up')
-
-        if text == 'show-ring':
+        elif text == 'show-ring':
+            global rtt_matrix
+            print(json.dumps(rtt_matrix, indent=2, sort_keys=True))
+            routes = []
             findRing(local, rtt_matrix, [], 0)
             routes.sort()
             print('The Total Cost: '+str(routes[0][0]))
             print('The Optimal Ring path: '+str(routes[0][1]))
             print("\n")
 
-        if text == 'disconnect':
+        elif text == 'disconnect':
             print('Goody-bye!')
             print ("\n")
             # server_thread.join()
@@ -608,7 +622,22 @@ def main():
             server.shutdown()
             sys.exit(1)
 
-        if text.split()[0] == 'send':
+        elif text.split()[0] == 'offline':
+            try:
+                duration = text.split()[1]
+
+                server.server_close()
+                server.shutdown()
+                print('server is offline; Will be back in '+duration+' seconds.')
+                time.sleep(int(duration))
+                print('Now server is online')
+                offline = True
+                break;
+            except:
+                print('Bac Command')
+
+
+        elif text.split()[0] == 'send':
             if (flag != 'S'):
                 print('Illegal Request!')
                 print('Only Senders may make send requests')
@@ -624,11 +653,11 @@ def main():
                     idx += SEND_BUF
                 file_text.append(data[idx:])
                 file_length = len(file_text)
-
                 f.close()
-
                 init_window(server.socket, nextAddress, file_name, file_length)
-
-
+        else:
+            print('Bad Command\n')
+    if offline:
+        main()
 if __name__ == "__main__":
     main()
