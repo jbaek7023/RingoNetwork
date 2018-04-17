@@ -30,6 +30,10 @@ routes = [] # for use in findRing()
 # Variables for Keep Alive
 seq_ids = {}
 seq_id = 0
+num_active_node = 0
+active_ringos = {}
+global non_active
+non_active = False
 
 # Variables for file sending
 pack_sequence = 0 # current sequence number
@@ -52,7 +56,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
         json_obj = json.loads(data.decode("utf-8"))
         keyword = json_obj.get('command')
         peers_response = json_obj.get('peers')
-
         if keyword == "peer_discovery":
             peers[str(self.client_address)] = 1  # Add to the Peer List
             ttl = json_obj['ttl'] - 1
@@ -84,14 +87,14 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             if ttl > 0: # received!! ttl == 1
                 socketo.sendto(kl_data.encode('utf-8'), self.client_address)
             if ttl == 0:
-                # I got this packet. the address is alive!
+                # I got this packet. the target address is alive!
                 # add to sequence ids
                 seq_ids.pop(seq_id, None)
-                rtt_matrix[item] =
         elif keyword == "find_rtt":
             rtt_count = json_obj['rtt_count']
             rtt_created = json_obj['created']
             if rtt_count == 1:
+                # First Call # Arrives at the target address
                 rtt_count = 2
                 new_peer_data = json.dumps({
                     'command': 'find_rtt',
@@ -175,6 +178,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             ack_number = json_obj['ack_number']
             filename = json_obj['filename']
             file_length = json_obj['file_length']
+            global expected_packet_ack
             print("expected ack\t" + str(expected_packet_ack))
             print("ack numb received\t" + str(ack_number))
             global pack_sequence
@@ -183,7 +187,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 print('UNEXPECTED ACK RECEIVED')
                 # send_window(socketo, self.client_address)
             else:
-                global expected_packet_ack
+
                 global stop_event
                 expected_packet_ack += 1
                 print("deleting from window...")
@@ -361,6 +365,14 @@ def findRing(node, cities, path, distance):
     # Add way point
     path.append(node)
 
+    # Delete None value cities
+    new_cities = cities.copy()
+    new_cities2 = cities.copy()
+    for key in new_cities:
+        if new_cities[key] == None:
+            new_cities2.pop(key, None)
+    cities = new_cities2
+
     # Calculate path length from current to last node
     if len(path) > 1:
         distance += cities[path[-2]][node]
@@ -380,23 +392,42 @@ def findRing(node, cities, path, distance):
         if (city not in path) and (node in cities[city]):
             findRing(city, dict(cities), list(path), distance)
 
-def churn_tout(server, created, item, seq_id, local):
+def churn_tout(server, created, item, seq_id, local, num_active_node):
     while True:
         # It's not in the sequence lists! (We got the packet back)
         if not seq_id in seq_ids:
-            break # Break timeout... Exit the Thread
+            active_ringos[item] = 1
+            global non_active, rtt_matrix
+            if len(active_ringos) == int(num_active_node):
+                num_active_node = len(active_ringos)
+                if non_active:
+                    non_active = False
+                    # peer Discovery, Find RTT, Send RTT, Find Optimal Ring
+                    start_peer_discovey()
+                    start_finding_own_rtt()
+                    start_finding_rtt_vectors()
+                    findRing(local, rtt_matrix, [], 0)
+                break # Break timeout... Exit the Thread
+
         else:
             now = time.time()
             if now - created > 3:
                 # Time Out Call!
-                # Remove the addres from RTT Matrix
-                rtt_matrix.pop(item, None)
+                # Remove the address from RTT Matrix
+                # if rtt_matrix[item] != None:
+                rtt_matrix[item] = None
+                # Remove it from active ringos
+                active_ringos.pop(item, None)
+                # decreases current num of ringos
+                num_active_node = int(num_of_ringos) - 1
+                non_active = True
                 # Find Optimal Ring
                 findRing(local, rtt_matrix, [], 0)
+                # print('found inactive node')
                 break #Break the Thread
         time.sleep(1)
 
-def churn(server, item, seq_id, local):
+def churn(server, item, seq_id, local, num_active_node):
     while True:
         # Keep Alive works until the program termiantes
         kl_name =  ast.literal_eval(item)[0]
@@ -422,45 +453,17 @@ def churn(server, item, seq_id, local):
             )
 
         # Make another thread
-        Thread(target=churn_tout, args=(server, created, item, seq_id, local)).start()
+        Thread(target=churn_tout, args=(server, created, item, seq_id, local, num_active_node)).start()
         time.sleep(0.5)
 
-def keep_alive(server, seq_id, local):
+def keep_alive(server, seq_id, local, num_active_node):
     # Send Packets to every node
     for item in list(peers.keys()):
-        # For each peers, we open keep_alive thread
-        Thread(target=churn, args=(server, item, seq_id, local)).start()
+        # For each peers, we open keep alive thread
+        Thread(target=churn, args=(server, item, seq_id, local, num_active_node)).start()
 
-def main():
-    if (len(sys.argv) != 6):
-        usage()
-    global flag
-    flag = sys.argv[1]  # Getting a flag i.e) S, F, R
-    local_port = sys.argv[2]  # Getting a local port i.e) 23222
-    poc_name = sys.argv[3]  # Getting the port name i.e) networklab3.cc.gatech.edu
-    poc_port = sys.argv[4]  # Getting the port number i.e) 8080 or 13445
-    global num_of_ringos
-    global current_num_of_ringos
-    num_of_ringos = sys.argv[5]  # Getting the number of ringos i.e) 5
-    current_num_of_ringos = num_of_ringos
-    check_flag(flag)
-    check_numeric(local_port, "local-port")
-    check_numeric(poc_port, "PoC-port")
-    check_numeric(num_of_ringos, "N")
-    global seq_id
-    # Peer Discover Here. #
-    host = "127.0.0.1"
-    HOST = "127.0.0.1"
-
-    # host = socket.gethostbyname(socket.gethostname())
-    HOST, PORT = host, int(local_port)
-    server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
-    server_thread = Thread(target=server.serve_forever, args=())
-    server_thread.daemon = False
-    server_thread.start()
-    print('WELCOME TO RINGO')
-
-    # Peer Discovery Start
+def start_peer_discovey():
+    global peers, num_of_ringos, poc_name, poc_port, server
     while len(peers) < int(num_of_ringos):
         # if it's not the first ringo,
         if poc_name != "0":
@@ -468,17 +471,16 @@ def main():
                 # Send to PoC # Peer Discovery
                 discovery(server, peers, poc_name, poc_port)
 
-    print("Peer Discovery Result")
+
+def start_printing_peer_discovery_result():
+    global peers
     for item in list(peers.keys()):
         peer_address = ast.literal_eval(item)[0]
         peer_port = ast.literal_eval(item)[1]
         print(str(peer_address) + ":" + str(peer_port))
 
-    time.sleep(1)
-
-    # Find RTT # Peer Discovery Here
-    # Open another thread->
-    # Keep Socket
+def start_finding_own_rtt():
+    global peers, server
     while True:
         if 1 not in peers.values():
             break
@@ -488,9 +490,9 @@ def main():
                 peer_port = ast.literal_eval(item)[1]
                 # Sending RTT to every peer at this time
                 findrtt(server, peer_address, peer_port)
-    time.sleep(1)
-    print("Finding Distance Vector of this Ringo...")
-    # Adding our distance vector to our RTT matrix
+
+def start_finding_rtt_vectors():
+    global rtt_matrix, peers, server, num_of_ringos, HOST, PORT
     rtt_matrix[str((HOST, PORT))] = peers
     while True:
         for item in list(peers.keys()):
@@ -498,16 +500,64 @@ def main():
             peer_port = ast.literal_eval(item)[1]
             send_rtt_vector(server, peers, peer_address, peer_port)
         if len(rtt_matrix) == int(num_of_ringos):
-            print("Finishing Finding RTT Matrix..")
             break;
 
-    # matrixKeys =
+def main():
+    if (len(sys.argv) != 6):
+        usage()
+    global rtt_matrix, flag, poc_name, local, poc_port, num_of_ringos, current_num_of_ringos, seq_id, active_ringos, num_active_node, HOST, PORT, server
+    flag = sys.argv[1]  # Getting a flag i.e) S, F, R
+    local_port = sys.argv[2]  # Getting a local port i.e) 23222
+    poc_name = sys.argv[3]  # Getting the port name i.e) networklab3.cc.gatech.edu
+    poc_port = sys.argv[4]  # Getting the port number i.e) 8080 or 13445
+    num_of_ringos = sys.argv[5]  # Getting the number of ringos i.e) 5
+    current_num_of_ringos = num_of_ringos
+    check_flag(flag)
+    check_numeric(local_port, "local-port")
+    check_numeric(poc_port, "PoC-port")
+    check_numeric(num_of_ringos, "N")
+
+    # global non_active
+    # non_active = False
+    num_active_node = int(num_of_ringos)
+    # Peer Discover Here. #
+
+    # host = socket.gethostbyname(socket.gethostname())
+
+    HOST = "127.0.0.1"
+    host = "127.0.0.1"
+
+    HOST, PORT = host, int(local_port)
+    server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
+    server_thread = Thread(target=server.serve_forever, args=())
+    server_thread.daemon = False
+    server_thread.start()
+
+    print('WELCOME TO RINGO')
+    # Peer Discovery Start
+    start_peer_discovey()
+
+    # Printing Peer Discoery Result
+    print("Peer Discovery Result")
+    start_printing_peer_discovery_result()
+    time.sleep(1)
+
+    # Find RTT # Peer Discovery Here
+    start_finding_own_rtt()
+    time.sleep(1)
+
+    # Find RTT Vectors
+    print("Finding Distance Vector of this Ringo...")
+    # Adding our distance vector to our RTT matrix
+    start_finding_rtt_vectors()
+    print("Finishing Finding RTT Matrix..")
+
+    # Find Ring
     local = str((HOST,PORT))
     findRing(local, rtt_matrix, [], 0)
     routes.sort()
 
-    keep_alive(server, seq_id, local)
-    # Thread(target=churn, args=(server, current_num_of_ringos, seq_num, 'path', 5,)).start()
+    keep_alive(server, seq_id, local, num_active_node)
 
     if len(routes) == 0:
         print ("FAILED TO FIND OPTIMAL RING")
@@ -532,8 +582,20 @@ def main():
             print(json.dumps(rtt_matrix, indent=2, sort_keys=True))
             # print(rtt_matrix)
             print ("\n")
+        if text == 'peers':
+            print(peers)
+            # print(rtt_matrix)
+            print ("\n")
+
+        if text.split()[0] == 'offline':
+            duration = text.split()[1]
+            print('Sleeping')
+            time.sleep(int(duration))
+            print('Node got up')
 
         if text == 'show-ring':
+            findRing(local, rtt_matrix, [], 0)
+            routes.sort()
             print('The Total Cost: '+str(routes[0][0]))
             print('The Optimal Ring path: '+str(routes[0][1]))
             print("\n")
