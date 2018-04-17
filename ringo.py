@@ -101,7 +101,7 @@ def writeToFile(filename, file_length):
 
     f = open(filename, 'wb')
     global file_chunks
-    for idx in range(file_length):
+    for idx in range(len(file_chunks)):
       f.write(file_chunks[idx])
     global expected_packet
     expected_packet = 0
@@ -195,9 +195,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                 expected_packet += 1
 
-                print('sending ack ' + str(incoming_seq_number) + "; still want all " + str(file_length))
-                socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
-
                 # Signal to user that it is safe to input again
                 if (incoming_seq_number == file_length-1):
                     print("File fully received!")
@@ -220,6 +217,9 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                         expected_packet = 0
                         global nextAddress
                         init_window(socketo, nextAddress, filename, file_length)
+
+            print('sending ack ' + str(incoming_seq_number) + "; still want all " + str(file_length))
+            socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
 
         elif keyword == "file_ack": # this is an ack for the piece of the file we sent
             # data = json_obj['data']
