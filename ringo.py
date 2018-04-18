@@ -18,7 +18,7 @@ import timeit
 import ast
 import uuid
 # import socket
-
+import signal
 
 PACKETS_WINDOW_SIZE = 5  # this many packets may be designated by number
 SEND_BUF = 1024 # size of msg send buffer
@@ -87,7 +87,10 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             })
 
             if ttl > 0: # received!! ttl == 1
-                socketo.sendto(kl_data.encode('utf-8'), self.client_address)
+                try:
+                    socketo.sendto(kl_data.encode('utf-8'), self.client_address)
+                except:
+                    pass
             if ttl == 0:
                 # I got this packet. the target address is alive!
                 # add to sequence ids
@@ -267,6 +270,7 @@ Timeout function; loops while we still expect more acks, then resets the globals
     to receive a future file
 '''
 def timeout(server, client_address, file_length, timeout):
+    global nextAddress
     print('TIMEOUT BEGINS HERE')
     while(True):
         global expected_packet_ack
@@ -290,7 +294,7 @@ def timeout(server, client_address, file_length, timeout):
         print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
         if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + timeout):
             print(expected_packet_ack)
-            send_window(server, client_address, file_length)
+            send_window(server, nextAddress, file_length)
 
 '''
 Used by Receiving Ringo to write the transferred file
@@ -346,10 +350,13 @@ def send_packet(socket, client_address, file_length, packet):
     print("sending packet\t" + str(json_pckt['seq_number']))
     print("sending to " + str(client_address))
 
-    socket.sendto(
-        packet.encode('utf-8'),
-        client_address
-        )
+    try:
+        socket.sendto(
+            packet.encode('utf-8'),
+            client_address
+            )
+    except:
+        pass
 
     if (sequence < len(sendTimes)):  # check if packet was already sent
         sendTimes[sequence] = time.time()
@@ -371,11 +378,13 @@ def send_rtt_vector(server, peers, poc_name, poc_port):
         'peers': peers,
         'ttl': 6,
         })
-
-    server.socket.sendto(
-        peer_data.encode('utf-8'),
-        poc_address
-        )
+    try:
+        server.socket.sendto(
+            peer_data.encode('utf-8'),
+            poc_address
+            )
+    except:
+        pass
 
 def discovery(server, peers, poc_name, poc_port):
     # We're sending RTT when it's the first one.
@@ -402,10 +411,13 @@ def findrtt(server, peer_name, peer_port):
         'created': time.time(),
         'rtt_count': 1,
         })
-    server.socket.sendto(
-        peer_data.encode('utf-8'),
-        peer_address
-        )
+    try:
+        server.socket.sendto(
+            peer_data.encode('utf-8'),
+            peer_address
+            )
+    except:
+        pass
 
 def churn_tout(server, created, item, seq_id, local):
 
@@ -471,12 +483,13 @@ def churn(server, item, seq_id, local):
             'created': created,
             'ttl': 2, # goes through one time
             })
-
-        server.socket.sendto(
-            kl_data.encode('utf-8'),
-            kl_address
-            )
-
+        try:
+            server.socket.sendto(
+                kl_data.encode('utf-8'),
+                kl_address
+                )
+        except:
+            break
 
         # Make another thread
         Thread(target=churn_tout, args=(server, created, item, seq_id, local)).start()
@@ -642,7 +655,7 @@ def main():
         nextPort = int(routes[0][1][1].split(",")[1][:5])
         global nextAddress
         nextAddress = (nextName, nextPort)
-        
+
         print('Enter Commands (show-matrix, show-ring, offline [seconds], file [], or disconnect)')
         text = input('> ')
 
@@ -656,8 +669,6 @@ def main():
             print ("\n")
 
         elif text == 'show-ring':
-
-            print(json.dumps(rtt_matrix, indent=2, sort_keys=True))
             routes = []
             findRing(local, rtt_matrix, [], 0)
             routes.sort()
@@ -666,61 +677,65 @@ def main():
             print("\n")
 
         elif text == 'disconnect':
-            print('Good bye!')
+            print('Good bye! (Killing Threads. You will be directed to terminal)')
             print ("\n")
             # for kl_thread in kl_threads_list:
             #     # kl_thread.join()
             #     # kl_thread.daemon = True
             # server_thread.join()
+            server.get_request()
             server.server_close()
             server.shutdown()
+            # signal.signal(signal.SIGINT, signal.SIG_DFL)
+            # server.accept()
             sys.exit(0)
             break
+        elif text.startswith("offline") :
+            if text.split()[0] == 'offline':
+                try:
+                    duration = text.split()[1]
+                    server.get_request()
+                    server.server_close()
+                    server.shutdown()
+                    print('server is offline; Will be back in '+duration+' seconds.')
+                    time.sleep(int(duration))
+                    print('Now server is online')
+                    offline = True
+                    break;
+                except:
+                    print('Bac Command')
+        elif text.startswith("send"):
+            if text.split()[0] == 'send':
+                if (flag != 'S'):
+                    print('Illegal Request!')
+                    print('Only Senders may make send requests')
+                else:
+                    print("FILENAME:\t" + text.split()[1])
+                    file_name = text.split()[1]
+                    f = open(file_name, "rb")
+                    data = f.read()
 
-        elif text.split()[0] == 'offline':
-            try:
-                duration = text.split()[1]
-                server.server_close()
-                server.shutdown()
-                print('server is offline; Will be back in '+duration+' seconds.')
-                time.sleep(int(duration))
-                print('Now server is online')
-                offline = True
-                break;
-            except:
-                print('Bac Command')
+                    file = []
 
-        elif text.split()[0] == 'send':
-            if (flag != 'S'):
-                print('Illegal Request!')
-                print('Only Senders may make send requests')
-            else:
-                print("FILENAME:\t" + text.split()[1])
-                file_name = text.split()[1]
-                f = open(file_name, "rb")
-                data = f.read()
+                    idx = 0
+                    while (idx + SEND_BUF) < len(data):
+                        file.append(data[idx:idx+SEND_BUF])
+                        idx += SEND_BUF
+                    file.append(data[idx:])
 
-                file = []
+                    f.close()
 
-                idx = 0
-                while (idx + SEND_BUF) < len(data):
-                    file.append(data[idx:idx+SEND_BUF])
-                    idx += SEND_BUF
-                file.append(data[idx:])
+                    global expected_packet_ack
+                    global pack_sequence
+                    global file_chunks
 
-                f.close()
+                    # iniitialize variables for file the sending
+                    file_chunks = file
+                    file_length = len(file_chunks)
+                    expected_packet_ack = 0
+                    pack_sequence = 0
 
-                global expected_packet_ack
-                global pack_sequence
-                global file_chunks
-
-                # iniitialize variables for file the sending
-                file_chunks = file
-                file_length = len(file_chunks)
-                expected_packet_ack = 0
-                pack_sequence = 0
-
-                init_window(server.socket, nextAddress, file_name, file_length)
+                    init_window(server.socket, nextAddress, file_name, file_length)
         else:
             print('Bad Command\n')
     if offline:
