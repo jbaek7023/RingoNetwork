@@ -1,0 +1,7 @@
+# Running five Ringos on network labs (different)
+[jbaek60@networklab3 ~]$ python3 ringo.py S 9000 0 0 3
+[jbaek60@networklab4 ~]$ python3 ringo.py F 9001 networklab3.cc.gatech.edu 9000 3
+[jbaek60@networklab5 ~]$ python3 ringo.py R 9002 networklab4.cc.gatech.edu 9001 3
+
+python3 ringo.py R 9000 0 0 2
+python3 ringo.py R 9001 127.0.1.1 9000 2

@@ -1,6 +1,10 @@
 # SFTP and SSH to NetworkLab
 ssh
-sftp
+
+# SFTP
+sftp jbaek60@entworklab2.cc.gatech.edu # SFTP into the server
+put pwd/filename
+
 python3 ringo.py 9090 networklab1.cc.gatech.edu 900 ...
 
 # Overall

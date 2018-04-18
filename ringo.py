@@ -72,8 +72,10 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             })
 
             if ttl > 0:
-                socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
-
+                try:
+                    socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
+                except:
+                    pass
         elif keyword =="keepalive":
             ttl = json_obj['ttl'] - 1
             created = json_obj['created']
@@ -106,7 +108,10 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     'rtt_count': rtt_count,
                     'created': rtt_created,
                 })
-                socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
+                try:
+                    socketo.sendto(new_peer_data.encode('utf-8'), self.client_address)
+                except:
+                    pass
             elif rtt_count == 2:
                 # Update RTT table
                 rtt_value = time.time() - json_obj['created']
@@ -127,8 +132,10 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 'ttl': ttl,
             })
             if ttl > 0:
-                socketo.sendto(new_rtt_peer_data.encode('utf-8'), self.client_address)
-
+                try:
+                    socketo.sendto(new_rtt_peer_data.encode('utf-8'), self.client_address)
+                except:
+                    pass
         elif keyword == "file":
             print("received message data from " + str(self.client_address))
 
@@ -183,8 +190,10 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                         init_window(socketo, nextAddress, filename, file_length)
 
             print('sending ack ' + str(incoming_seq_number) + "; still want all " + str(file_length))
-            socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
-
+            try:
+                socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
+            except:
+                pass
         elif keyword == "file_ack": # this is an ack for the piece of the file we sent
             # data = json_obj['data']
             ack_number = json_obj['ack_number']
@@ -597,13 +606,9 @@ def main():
     num_active_node = int(num_of_ringos)
     # Peer Discover Here. #
 
-    host = socket.gethostbyname(socket.gethostname())
+    # , int(local_port)
+    HOST, PORT = socket.gethostbyname(socket.gethostname()), int(local_port)
 
-    HOST = "127.0.0.1"
-    host = "127.0.0.1"
-
-    # socket.gethostbyname(socket.gethostname()), int(local_port)
-    HOST, PORT = host, int(local_port)
     server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
     server_thread = Thread(target=server.serve_forever, args=())
     server_thread.daemon = False
