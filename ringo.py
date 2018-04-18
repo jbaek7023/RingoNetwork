@@ -54,6 +54,10 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
         json_obj = json.loads(data.decode("utf-8"))
         keyword = json_obj.get('command')
         peers_response = json_obj.get('peers')
+
+        global expected_packet
+        global expected_packet_ack
+
         if keyword == "peer_discovery":
             peers[str(self.client_address)] = 1  # Add to the Peer List
             ttl = json_obj['ttl'] - 1
@@ -132,7 +136,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             print("seq numb\t" + str(incoming_seq_number) + " and I want " + str(expected_packet))
 
 
-            global expected_packet
+
 
             json_pckt = ""
 
@@ -171,7 +175,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     global forwarded
                     if flag == 'F' and forwarded == False:
                         print("I'm forwarding this file!")
-                        global expected_packet
                         expected_packet = 0
                         global nextAddress
                         init_window(socketo, nextAddress, filename, file_length)
@@ -195,7 +198,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 # send_window(socketo, self.client_address)
             else:
 
-                global expected_packet_ack
+
                 global stop_event
 
                 expected_packet_ack += 1
@@ -266,11 +269,12 @@ Timeout function; loops while we still expect more acks, then resets the globals
 def timeout(server, client_address, file_length, timeout):
     print('TIMEOUT BEGINS HERE')
     while(True):
+        global expected_packet_ack
         if (expected_packet_ack >= file_length):    # implies we've received ack for last packet
             # reset global variables
             print('breaking timer')
             global timeoutSet
-            global expected_packet_ack
+
             global pack_sequence
             global file_chunks
 
@@ -404,54 +408,50 @@ def findrtt(server, peer_name, peer_port):
         )
 
 def churn_tout(server, created, item, seq_id, local):
-    try:
 
-        # Timeout for each peer route A to B
-        while True:
-            global non_active, rtt_matrix, num_active_node
-            # It's not in the sequence lists! (We got the packet back)
-            if not seq_id in seq_ids:
-                active_ringos[item] = 1
-                # Oh just found new active ringo (Inactive to Active)
-                if int(num_active_node) < len(active_ringos):
+    # Timeout for each peer route A to B
+    while True:
+        global non_active, rtt_matrix, num_active_node
+        # It's not in the sequence lists! (We got the packet back)
+        if not seq_id in seq_ids:
+            active_ringos[item] = 1
+            # Oh just found new active ringo (Inactive to Active)
+            if int(num_active_node) < len(active_ringos):
+                num_active_node = len(active_ringos)
+                # if non_active:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                num_active_node = int(num_of_ringos) - 1
+                non_active = False
+                # peer Discovery, Find RTT, Send RTT, Find Optimal Ring
+                start_peer_discovey()
+                start_finding_own_rtt()
+                start_finding_rtt_vectors()
+                routes = []
+                findRing(local, rtt_matrix, [], 0)
+                break # Break timeout... Exit the Thread
+
+        else:
+            now = time.time()
+            if now - created > 3:
+                # Happens only few times
+
+                # Time Out Call!
+                # Remove the address from RTT Matrix
+                # if rtt_matrix[item] != None:
+                rtt_matrix[item] = None
+                # Remove it from active ringos
+                active_ringos.pop(item, None)
+                # decreases current num of ringos
+                non_active = True
+                if int(num_active_node) > len(active_ringos):
                     num_active_node = len(active_ringos)
-                    # if non_active:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                    num_active_node = int(num_of_ringos) - 1
-                    non_active = False
-                    # peer Discovery, Find RTT, Send RTT, Find Optimal Ring
-                    start_peer_discovey()
-                    start_finding_own_rtt()
-                    start_finding_rtt_vectors()
                     routes = []
                     findRing(local, rtt_matrix, [], 0)
-                    break # Break timeout... Exit the Thread
+                # Find Optimal Ring
 
-            else:
-                now = time.time()
-                if now - created > 3:
-                    # Happens only few times
+                # print('found inactive node')
+                break #Break the Thread
+        time.sleep(1)
 
-                    # Time Out Call!
-                    # Remove the address from RTT Matrix
-                    # if rtt_matrix[item] != None:
-                    rtt_matrix[item] = None
-                    # Remove it from active ringos
-                    active_ringos.pop(item, None)
-                    # decreases current num of ringos
-                    non_active = True
-                    if int(num_active_node) > len(active_ringos):
-                        num_active_node = len(active_ringos)
-                        routes = []
-                        findRing(local, rtt_matrix, [], 0)
-                    # Find Optimal Ring
-
-                    # print('found inactive node')
-                    break #Break the Thread
-            time.sleep(1)
-    except:
-        server.server_close()
-        server.shutdown()
-        sys.exit()
 def churn(server, item, seq_id, local):
     while True:
         # Keep Alive works until the program termiantes
@@ -471,15 +471,12 @@ def churn(server, item, seq_id, local):
             'created': created,
             'ttl': 2, # goes through one time
             })
-        try:
-            server.socket.sendto(
-                kl_data.encode('utf-8'),
-                kl_address
-                )
-        except OSError as e:
-            server.server_close()
-            server.shutdown()
-            sys.exit()
+
+        server.socket.sendto(
+            kl_data.encode('utf-8'),
+            kl_address
+            )
+
 
         # Make another thread
         Thread(target=churn_tout, args=(server, created, item, seq_id, local)).start()
@@ -645,7 +642,7 @@ def main():
         nextPort = int(routes[0][1][1].split(",")[1][:5])
         global nextAddress
         nextAddress = (nextName, nextPort)
-
+        
         print('Enter Commands (show-matrix, show-ring, offline [seconds], file [], or disconnect)')
         text = input('> ')
 
@@ -659,7 +656,7 @@ def main():
             print ("\n")
 
         elif text == 'show-ring':
-            global rtt_matrix
+
             print(json.dumps(rtt_matrix, indent=2, sort_keys=True))
             routes = []
             findRing(local, rtt_matrix, [], 0)
