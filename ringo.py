@@ -296,10 +296,9 @@ def timeout(server, client_address, file_length, timeout):
 
             break;
 
-        time.sleep(1)
+        time.sleep(0.1)
         now = time.time()
-        print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
-        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + timeout):
+        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + 2):
             print(expected_packet_ack)
             send_window(server, nextAddress, file_length)
 
