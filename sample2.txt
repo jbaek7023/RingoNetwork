@@ -6,3 +6,14 @@
 [jbaek60@networklab7 ~]$ python3 ringo.py R 9004 networklab6.cc.gatech.edu 9003 5
 
 # 
+
+
+python3 ringo.py R 9000 0 0 2
+python3 ringo.py R 9001 127.0.1.1 9000 2
+
+# test integrity of sent files; catty(2).jpg is the file that arrives at the receiver
+$ diff catty.jpg catty(2).jpg
+
+# test integrity of sent files
+$ sha1sum catty.jpg
+$ sha1sum catty(2).jpg

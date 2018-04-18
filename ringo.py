@@ -234,10 +234,8 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                             })
                     print('adding to window...')
 
-
                     window.append(new_pckt)
                     print(str(len(window)))
-
 
                     pack_sequence += 1
 
@@ -554,35 +552,37 @@ def start_finding_rtt_vectors():
             break;
 
 def findRing(node, cities, path, distance):
-    # Add way point
-    path.append(node)
+    try:
+        # Add way point
+        path.append(node)
 
-    # Delete None value cities
-    new_cities = cities.copy()
-    new_cities2 = cities.copy()
-    for key in new_cities:
-        if new_cities[key] == None:
-            new_cities2.pop(key, None)
-    cities = new_cities2
+        # Delete None value cities
+        new_cities = cities.copy()
+        new_cities2 = cities.copy()
+        for key in new_cities:
+            if new_cities[key] == None:
+                new_cities2.pop(key, None)
+        cities = new_cities2
 
-    # Calculate path length from current to last node
-    if len(path) > 1:
-        distance += cities[path[-2]][node]
+        # Calculate path length from current to last node
+        if len(path) > 1:
+            distance += cities[path[-2]][node]
 
-    # If path contains all cities and is not a dead end,
-    # add path from last to first city and return.
-    if (len(cities) == len(path)) and (path[0] in cities[path[-1]]):
-        global routes
-        path.append(path[0])
-        distance += cities[path[-2]][path[0]]
-        routes.append([distance, path])
-        return
+        # If path contains all cities and is not a dead end,
+        # add path from last to first city and return.
+        if (len(cities) == len(path)) and (path[0] in cities[path[-1]]):
+            global routes
+            path.append(path[0])
+            distance += cities[path[-2]][path[0]]
+            routes.append([distance, path])
+            return
 
-    # Fork paths for all possible cities not yet used
-    for city in cities:
-        if (city not in path) and (node in cities[city]):
-            findRing(city, dict(cities), list(path), distance)
-
+        # Fork paths for all possible cities not yet used
+        for city in cities:
+            if (city not in path) and (node in cities[city]):
+                findRing(city, dict(cities), list(path), distance)
+    except:
+        pass
 def main():
     if (len(sys.argv) != 6):
         usage()
@@ -656,11 +656,13 @@ def main():
     # nextAddress = ('127.0.0.1',6000)
 
     while True:
-        nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
-        nextPort = int(routes[0][1][1].split(",")[1][:5])
-        global nextAddress
-        nextAddress = (nextName, nextPort)
-
+        try:
+            nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+            nextPort = int(routes[0][1][1].split(",")[1][:5])
+            global nextAddress
+            nextAddress = (nextName, nextPort)
+        except:
+            pass
         print('Enter Commands (show-matrix, show-ring, offline [seconds], send [filename.type], or disconnect)')
         text = input('> ')
 
@@ -677,9 +679,12 @@ def main():
             routes = []
             findRing(local, rtt_matrix, [], 0)
             routes.sort()
-            print('The Total Cost: '+str(routes[0][0]))
-            print('The Optimal Ring path: '+str(routes[0][1]))
-            print("\n")
+            try:
+                print('The Total Cost: '+str(routes[0][0]))
+                print('The Optimal Ring path: '+str(routes[0][1]))
+                print("\n")
+            except:
+                pass
 
         elif text == 'disconnect':
             print('Good bye! (Killing Threads. You will be directed to terminal)')
