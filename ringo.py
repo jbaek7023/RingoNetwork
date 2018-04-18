@@ -168,10 +168,10 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 expected_packet += 1
 
                 # Signal to user that it is safe to input again
-                if (incoming_seq_number == file_length-1):
+                if (incoming_seq_number == file_length-1 and expected_packet == file_length):   # confirmed received in full
                     print("File fully received!")
                     print(">")
-                    print("flag: " + flag)
+                    # print("flag: " + flag)
 
                     '''
                     Write file at receiver
@@ -210,7 +210,6 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 # send_window(socketo, self.client_address)
             else:
 
-
                 global stop_event
 
                 expected_packet_ack += 1
@@ -218,12 +217,12 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 print("deleting from window...")
 
                 del window[0]
-                print(str(len(window)))
+                # print(str(len(window)))
 
                 print("FILE SEQUENCE NUMBER:\t" + str(pack_sequence))
                 # print("length of file_chunks:\t" + str(len(file_chunks)))
 
-                if pack_sequence < len(file_chunks):
+                if pack_sequence < file_length: #len(file_chunks):
 
                     new_pckt = json.dumps({
                             'command': 'file',
@@ -242,7 +241,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     send_packet(socketo, self.client_address, file_length, new_pckt)
 
             # Signal to user that it is safe to input again
-            if (ack_number == file_length-1):
+            if (ack_number == file_length-1 and expected_packet_ack == file_length): # last packet confirmed sent
                 print("File fully sent!")
                 print(">")
         else:
@@ -296,9 +295,11 @@ def timeout(server, client_address, file_length, timeout):
 
             break;
 
-        time.sleep(0.1)
+
+        time.sleep(.01)
         now = time.time()
-        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + 2):
+        # print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
+        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + .1 *timeout):
             print(expected_packet_ack)
             send_window(server, nextAddress, file_length)
 
