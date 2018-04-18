@@ -597,7 +597,7 @@ def main():
     num_active_node = int(num_of_ringos)
     # Peer Discover Here. #
 
-    # host = socket.gethostbyname(socket.gethostname())
+    host = socket.gethostbyname(socket.gethostname())
 
     HOST = "127.0.0.1"
     host = "127.0.0.1"

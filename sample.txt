@@ -1,35 +1,40 @@
+# SFTP and SSH to NetworkLab
+ssh
+sftp
+python3 ringo.py 9090 networklab1.cc.gatech.edu 900 ...
+
 # Overall
 This file contains the sets of instructions and the part of output.
 
 # Running two ringos on local machine
 python3 ringo.py R 8000 0 0 2
-python3 ringo.py F 9000 127.0.0.1 8000 2
+python3 ringo.py F 9000 127.0.1.1 8000 2
 
-  jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py F 9020 127.0.0.1 8000 2
+  jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py F 9020 127.0.1.1 8000 2
   WELCOME TO RINGO
   Peer Discovery Result
-  127.0.0.1:9020
-  127.0.0.1:8000
+  127.0.1.1:9020
+  127.0.1.1:8000
   Finding Distance Vector of this Ringo...
   Finishing Finding RTT Matrix..
 
   Enter Commands (show-matrix, show-ring or disconnect)
   > show-matrix
   {
-    "('127.0.0.1', 8000)": {
-      "('127.0.0.1', 8000)": 0.0003681182861328125,
-      "('127.0.0.1', 9020)": 0.00024509429931640625
+    "('127.0.1.1', 8000)": {
+      "('127.0.1.1', 8000)": 0.0003681182861328125,
+      "('127.0.1.1', 9020)": 0.00024509429931640625
     },
-    "('127.0.0.1', 9020)": {
-      "('127.0.0.1', 8000)": 0.0007402896881103516,
-      "('127.0.0.1', 9020)": 0.0010623931884765625
+    "('127.0.1.1', 9020)": {
+      "('127.0.1.1', 8000)": 0.0007402896881103516,
+      "('127.0.1.1', 9020)": 0.0010623931884765625
     }
   }
 
   Enter Commands (show-matrix, show-ring or disconnect)
   > show-ring
   The Total Cost: 0.0009853839874267578
-  The Optimal Ring path: ["('127.0.0.1', 9020)", "('127.0.0.1', 8000)", "('127.0.0.1', 9020)"]
+  The Optimal Ring path: ["('127.0.1.1', 9020)", "('127.0.1.1', 8000)", "('127.0.1.1', 9020)"]
 
   Enter Commands (show-matrix, show-ring or disconnect)
   > disconnect
@@ -40,14 +45,14 @@ python3 ringo.py F 9000 127.0.0.1 8000 2
 
 # Running five Ringos on local machine
 jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py R 8080 0 0 5
-jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 9003 127.0.0.1 8080 5
-jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 7020 127.0.0.1 8080 5
-jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 7000 127.0.0.1 7020 5
-jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py F 9020 127.0.0.1 7000 5
+jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 9003 127.0.1.1 8080 5
+jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 7020 127.0.1.1 8080 5
+jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py S 7000 127.0.1.1 7020 5
+jaemin@jaemin-desktop:~/Desktop/RingoNetwork$ python3 ringo.py F 9020 127.0.1.1 7000 5
 
 # Running two Ringos on network labs (local)
 [jbaek60@networklab1 ~]$ python3 ringo.py R 9000 0 0 2
-[jbaek60@networklab1 ~]$ python3 ringo.py R 9001 127.0.0.1 9000 2
+[jbaek60@networklab1 ~]$ python3 ringo.py R 9001 127.0.1.1 9000 2
 >>>>>>> 8404519395a8e987a549469b6ccb1f53f15e2773
 
 # Running five Ringos on network labs (different)
@@ -69,7 +74,6 @@ Peer Discovery Result
 130.207.107.16:9012
 Finding Distance Vector of this Ringo...
 Finishing Finding RTT Matrix..
-
 
 Enter Commands (show-matrix, show-ring or disconnect)
 > show-ring
