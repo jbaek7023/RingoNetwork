@@ -376,7 +376,7 @@ def send_packet(socket, client_address, file_length, packet):
     if (json_pckt['seq_number'] == 0 and not timeoutSet):
         print("BEGINNING THREAD")
         timeoutSet = True
-        Thread(target=timeout,args=(socket, client_address, file_length, 5,)).start()
+        Thread(target=timeout,args=(socket, client_address, file_length, 1.5,)).start()
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
     # We're sending RTT when it's the first one.
