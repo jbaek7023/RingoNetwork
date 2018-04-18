@@ -656,7 +656,7 @@ def main():
         global nextAddress
         nextAddress = (nextName, nextPort)
 
-        print('Enter Commands (show-matrix, show-ring, offline [seconds], file [], or disconnect)')
+        print('Enter Commands (show-matrix, show-ring, offline [seconds], send [filename.type], or disconnect)')
         text = input('> ')
 
         if text == 'show-matrix':
