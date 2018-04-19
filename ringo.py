@@ -20,11 +20,14 @@ import uuid
 # import socket
 import signal
 
+
+
 PACKETS_WINDOW_SIZE = 5  # this many packets may be designated by number
 SEND_BUF = 1024 # size of msg send buffer
 
 peers = {}
 rtt_matrix = {}
+global routes
 routes = [] # for use in findRing()
 
 # Variables for Keep Alive
@@ -186,9 +189,16 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     if flag == 'F' and forwarded == False:
                         print("I'm forwarding this file!")
                         expected_packet = 0
-                        global nextAddress
-                        init_window(socketo, nextAddress, filename, file_length)
 
+                        try:
+                            nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                            nextPort = int(routes[0][1][1].split(",")[1][:5])
+
+                            nextAddress = (nextName, nextPort)
+                        except:
+                            pass
+
+                        init_window(socketo, nextAddress, filename, file_length)
             print('sending ack ' + str(incoming_seq_number) + "; still want all " + str(file_length))
             try:
                 socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
@@ -237,8 +247,13 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     print(str(len(window)))
 
                     pack_sequence += 1
-
-                    send_packet(socketo, self.client_address, file_length, new_pckt)
+                    try:
+                        nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                        nextPort = int(routes[0][1][1].split(",")[1][:5])
+                        nextAddress = (nextName, nextPort)
+                    except:
+                        pass
+                    send_packet(socketo, nextAddress, file_length, new_pckt)
 
             # Signal to user that it is safe to input again
             if (ack_number == file_length-1 and expected_packet_ack == file_length): # last packet confirmed sent
@@ -299,8 +314,14 @@ def timeout(server, client_address, file_length, timeout):
         time.sleep(.01)
         now = time.time()
         # print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
-        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + .1 *timeout):
+        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + timeout):
             print(expected_packet_ack)
+            try:
+                nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                nextPort = int(routes[0][1][1].split(",")[1][:5])
+                nextAddress = (nextName, nextPort)
+            except:
+                pass
             send_window(server, nextAddress, file_length)
 
 '''
@@ -355,12 +376,18 @@ def send_packet(socket, client_address, file_length, packet):
     json_pckt = json.loads(packet) # stringify for printing
     sequence = json_pckt['seq_number']
     print("sending packet\t" + str(json_pckt['seq_number']))
-    print("sending to " + str(client_address))
-
+    global nextAddress
+    try:
+        nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+        nextPort = int(routes[0][1][1].split(",")[1][:5])
+        nextAddress = (nextName, nextPort)
+    except:
+        pass
+    print("sending to " + str(nextAddress))
     try:
         socket.sendto(
             packet.encode('utf-8'),
-            client_address
+            nextAddress
             )
     except:
         pass
@@ -444,8 +471,14 @@ def churn_tout(server, created, item, seq_id, local):
                 start_peer_discovey()
                 start_finding_own_rtt()
                 start_finding_rtt_vectors()
-                routes = []
                 findRing(local, rtt_matrix, [], 0)
+                try:
+                    nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                    nextPort = int(routes[0][1][1].split(",")[1][:5])
+
+                    nextAddress = (nextName, nextPort)
+                except:
+                    pass
                 break # Break timeout... Exit the Thread
 
         else:
@@ -463,8 +496,14 @@ def churn_tout(server, created, item, seq_id, local):
                 non_active = True
                 if int(num_active_node) > len(active_ringos):
                     num_active_node = len(active_ringos)
-                    routes = []
                     findRing(local, rtt_matrix, [], 0)
+                    try:
+                        nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                        nextPort = int(routes[0][1][1].split(",")[1][:5])
+
+                        nextAddress = (nextName, nextPort)
+                    except:
+                        pass
                 # Find Optimal Ring
 
                 # print('found inactive node')
@@ -571,7 +610,6 @@ def findRing(node, cities, path, distance):
         # If path contains all cities and is not a dead end,
         # add path from last to first city and return.
         if (len(cities) == len(path)) and (path[0] in cities[path[-1]]):
-            global routes
             path.append(path[0])
             distance += cities[path[-2]][path[0]]
             routes.append([distance, path])
@@ -635,7 +673,6 @@ def main():
 
     # Find Ring
     local = str((HOST,PORT))
-    routes = []
     findRing(local, rtt_matrix, [], 0)
     routes.sort()
 
@@ -679,6 +716,12 @@ def main():
             routes = []
             findRing(local, rtt_matrix, [], 0)
             routes.sort()
+            try:
+                nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                nextPort = int(routes[0][1][1].split(",")[1][:5])
+                nextAddress = (nextName, nextPort)
+            except:
+                pass
             try:
                 print('The Total Cost: '+str(routes[0][0]))
                 print('The Optimal Ring path: '+str(routes[0][1]))
@@ -744,7 +787,13 @@ def main():
                     file_length = len(file_chunks)
                     expected_packet_ack = 0
                     pack_sequence = 0
+                    try:
+                        nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                        nextPort = int(routes[0][1][1].split(",")[1][:5])
 
+                        nextAddress = (nextName, nextPort)
+                    except:
+                        pass
                     init_window(server.socket, nextAddress, file_name, file_length)
         else:
             print('Bad Command\n')
