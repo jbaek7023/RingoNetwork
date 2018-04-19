@@ -53,9 +53,13 @@ global nextAddress
 sendTimes = []  # the times at which packets are sent
 nextAddress = ()    # the neighbor to which a message is to be forwarded
 
+hostAddress = ()
+
 # nextChanged = False    # tells timeout function the nextAddress has changed
 
 receivedFull = False # tells receiver it has the full message
+
+timeoutOnPacket = {}
 
 class MyUDPHandler(socketserver.BaseRequestHandler):
     def handle(self):
@@ -154,6 +158,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             print("received message data from " + str(self.client_address))
 
             data = json_obj['data'].encode('ISO-8859-1')
+            ring = json_obj['ring']
             incoming_seq_number = json_obj['seq_number']
             filename = json_obj['filename']
             file_length = json_obj['file_length']
@@ -167,6 +172,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             pckt_ack = json.dumps({
                     'command': 'file_ack',
                     'ack_number': incoming_seq_number,
+                    'ring': ring,
                     'filename' : filename,
                     'file_length': file_length,
                     # 'data': data,
@@ -219,7 +225,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                         # forwarded = True
 
-                        init_window(socketo, nextAddress, filename, file_length)
+                        init_window(socketo, nextAddress, ring, filename, file_length)
 
                 try:
                     socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
@@ -235,14 +241,18 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             ack_number = json_obj['ack_number']
             filename = json_obj['filename']
             file_length = json_obj['file_length']
+            ring = json_obj['ring']
             print("expected ack\t" + str(expected_packet_ack))
             print("ack numb received\t" + str(ack_number) + "\n\tfrom " + str(self.client_address))
 
 
             global pack_sequence
 
-            if self.client_address != nextAddress:  # if next address changed, let it timeout
-                print('ACK FROM UNEXPECTED ADDRESS')
+            if self.client_address == hostAddress:
+                print("not doing that")
+
+            # elif self.client_address != nextAddress:  # if next address changed, let it timeout
+            #     print('ACK FROM UNEXPECTED ADDRESS')
 
             elif self.client_address == nextAddress and ack_number != expected_packet_ack:
                 print('UNEXPECTED ACK RECEIVED')
@@ -265,6 +275,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                     new_pckt = json.dumps({
                             'command': 'file',
+                            'ring' : ring,
                             'filename': filename,
                             'file_length':file_length,
                             'seq_number': pack_sequence,
@@ -319,7 +330,7 @@ timeoutSet = False
 Timeout function; loops while we still expect more acks, then resets the globals
     to receive a future file
 '''
-def timeout(server, filename, file_length, timeout):
+def timeout(server, ring, filename, file_length, timeout):
     global nextAddress, routes, rtt_matrix, timeoutSet
     print('TIMEOUT BEGINS HERE')
     while(True):
@@ -362,24 +373,41 @@ def timeout(server, filename, file_length, timeout):
         # print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
         if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + timeout):
 
+
+
             print("timeout; expected ack:\t" + str(expected_packet_ack))
             routes = []
             findRing(local, rtt_matrix, [], 0)
             routes.sort()
-            try:
-                nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
-                nextPort = int(routes[0][1][1].split(",")[1][:5])
-                newNext = (nextName, nextPort) 
 
+            newNext = ()
+            try:
+                # nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                # nextPort = int(routes[0][1][1].split(",")[1][:5])
+                # newNext = (nextName, nextPort) 
+                newNext = findNextInRing(routes[0][1][:-1])
+                peer_address = findNextInRing(ring)
             except:
                 pass
-            if newNext != nextAddress:
+
+            # peer_address = findNextInRing(ring)
+
+            if newNext != peer_address:
                 print("old address:\t" + str(nextAddress) + ";  new address:\t"+ str(newNext))
                 timeoutSet = False;
                 nextAddress = newNext
-                init_window(server, nextAddress, filename,file_length)
+                ring = list(reversed(ring))
+                init_window(server, nextAddress, ring, filename,file_length)
 
                 break;
+
+            # if newNext != nextAddress:
+            #     print("old address:\t" + str(nextAddress) + ";  new address:\t"+ str(newNext))
+            #     timeoutSet = False;
+            #     nextAddress = newNext
+            #     init_window(server, nextAddress, ring, filename,file_length)
+
+            #     break;
             else:
                 send_window(server, nextAddress, file_length)
         # routes = []
@@ -409,8 +437,8 @@ def writeToFile(filename, file_length):
 """
 initialize packet window
 """
-def init_window(server, peer_address, filename, file_length):
-    global pack_sequence, nextAddress, routes, rtt_matrix, window, expected_packet_ack
+def init_window(server, peer_address, ring, filename, file_length):
+    global pack_sequence, nextAddress, routes, rtt_matrix, window, expected_packet_ack, timeoutOnPacket
 
     idx = 0
     pack_sequence = 0
@@ -433,12 +461,16 @@ def init_window(server, peer_address, filename, file_length):
             'filename': filename,
             'file_length': file_length, #length in packets
             'seq_number': pack_sequence,
+            'ring': ring,
             'data': file_chunks[idx].decode('ISO-8859-1')
             })
         window.append(new_pckt)
 
+        timeoutOnPacket[pack_sequence] = 0
         pack_sequence += 1
         idx += 1
+
+    peer_address = findNextInRing(ring)
 
     send_window(server, peer_address, file_length)
 
@@ -469,11 +501,12 @@ def send_packet(socket, peer_address, file_length, packet):
     json_pckt = json.loads(packet) # stringify for printing
     filename = json_pckt['filename']
     sequence = json_pckt['seq_number']
+    ring = json_pckt['ring']
     print("sending packet\t" + str(json_pckt['seq_number']))
 
-    routes = []
-    findRing(local, rtt_matrix, [], 0)
-    routes.sort()
+    # routes = []
+    # findRing(local, rtt_matrix, [], 0)
+    # routes.sort()
     # try:
     #     nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
     #     nextPort = int(routes[0][1][1].split(",")[1][:5])
@@ -481,7 +514,8 @@ def send_packet(socket, peer_address, file_length, packet):
     # except:
         # pass
     # print("sending to " + str(nextAddress))
-    print("sending to\t" + str(peer_address))
+    # print("sending to\t" + str(peer_address))
+
     try:
         socket.sendto(
             packet.encode('utf-8'),
@@ -499,7 +533,7 @@ def send_packet(socket, peer_address, file_length, packet):
     if (json_pckt['seq_number'] == 0 and not timeoutSet):
         timeoutSet = True
 
-        Thread(target=timeout,args=(socket, filename, file_length, 1,)).start()
+        Thread(target=timeout,args=(socket, ring, filename, file_length, 1,)).start()
 
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
@@ -703,6 +737,31 @@ def start_finding_rtt_vectors():
         if len(rtt_matrix) == int(num_of_ringos):
             break;
 
+def findNextInRing(ring):
+    # peer_addr_string = ""
+    peer_addr = ()
+    global hostAddress
+
+    for idx in range(len(ring)):
+        # ringoPort = int(ring[idx].split(",")[1][:5])
+        # ringoName = ring[idx].split(",")[0][2:-1]
+        # ringo = (ringoName, ringoPort)
+        if ring[idx] == str(hostAddress):
+            if idx == len(ring) - 1:
+                ringoPort = int(ring[0].split(",")[1][:5])
+                ringoName = ring[0].split(",")[0][2:-1]
+                ringo = (ringoName, ringoPort)
+                peer_addr = ringo
+
+            else:
+                ringoPort = int(ring[idx+1].split(",")[1][:5])
+                ringoName = ring[idx+1].split(",")[0][2:-1]
+                ringo = (ringoName, ringoPort)
+                peer_addr = ringo
+                break;
+    
+    return peer_addr
+
 def findRing(node, cities, path, distance):
     try:
         # Add way point
@@ -759,7 +818,11 @@ def main():
     # , int(local_port)
     HOST, PORT = socket.gethostbyname(socket.gethostname()), int(local_port)
 
-    server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
+    global hostAddress
+    hostAddress = (HOST, PORT)
+
+    # server = socketserver.UDPServer((HOST, PORT), MyUDPHandler)
+    server = socketserver.UDPServer(hostAddress, MyUDPHandler)
     server_thread = Thread(target=server.serve_forever, args=())
     server_thread.daemon = False
     server_thread.start()
@@ -805,9 +868,6 @@ def main():
     print ("\n")
     print("My address:\t" + str(routes[0][1][0]))   #this will always be the current ringo
     print("Next address:\t" + str(routes[0][1][1])) #next ringo in optimal ring
-
-    print(routes[0][0])
-    print(routes[0][0] + 1)
 
     # nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
     # nextPort = int(routes[0][1][1].split(",")[1][:5])
@@ -922,6 +982,7 @@ def main():
                     routes = []
                     findRing(local, rtt_matrix, [], 0)
                     routes.sort()
+
                     try:
                         nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
                         nextPort = int(routes[0][1][1].split(",")[1][:5])
@@ -929,7 +990,14 @@ def main():
                         nextAddress = (nextName, nextPort)
                     except:
                         pass
-                    init_window(server.socket, nextAddress, file_name, file_length)
+
+                    ring = routes[0][1][:-1]    #   current node listed twice; trim off second instance
+                    print("the ring is:\t" + str(ring))
+                    nextR = findNextInRing(ring) 
+                    print("next ringo is " + str(nextR))
+                    init_window(server.socket, nextAddress, ring, file_name, file_length)
+                    global timeoutOnPacket
+
         else:
             print('Bad Command\n')
     if offline:
