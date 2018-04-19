@@ -59,7 +59,7 @@ hostAddress = ()
 
 receivedFull = False # tells receiver it has the full message
 
-timeoutOnPacket = {}
+packetsReceivedOnZero = {}
 
 class MyUDPHandler(socketserver.BaseRequestHandler):
     def handle(self):
@@ -178,15 +178,28 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     # 'data': data,
                     })
 
+            if incoming_seq_number == 0:
+                receivedFull = False
+                expected_packet = 0
+
             if incoming_seq_number != expected_packet:
 
                 print('Unexpected packet: ' + str(incoming_seq_number))
 
-                if incoming_seq_number <=expected_packet + 1 or expected_packet == 0:
+                if incoming_seq_number <= expected_packet:
+                    
                     try:
+                        print("sending ack for " + str(incoming_seq_number)+ " anyway")
                         socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
                     except:
                         pass
+                elif receivedFull: # in this case, should expected_pack 
+                    try:
+                        print("done receiving; sending ack for " + str(incoming_seq_number) + " anyway")
+                        socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
+                    except:
+                        pass
+                    
 
             if incoming_seq_number == expected_packet:  # if not expeceted, let the sender timeout
                 print('sending ack ' + str(incoming_seq_number) + "; I receive until " + str(file_length - 1))
@@ -196,6 +209,8 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                 # Signal to user that it is safe to input again
                 if (incoming_seq_number == file_length-1 and expected_packet == file_length):   # confirmed received in full
+                    
+                    receivedFull = True
                     print("File fully received!")
                     print(">")
                     receivedFull = True;
@@ -246,15 +261,20 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             print("ack numb received\t" + str(ack_number) + "\n\tfrom " + str(self.client_address))
 
 
-            global pack_sequence
+            global pack_sequence, hostAddress
+
+            expectedClient = findNextInRing(ring)
 
             if self.client_address == hostAddress:
-                print("not doing that")
+                print("FECEIVED ACK FROM HOST")
 
+            
             # elif self.client_address != nextAddress:  # if next address changed, let it timeout
             #     print('ACK FROM UNEXPECTED ADDRESS')
+            elif self.client_address != expectedClient:
+                print('ACK FROM UNEXPECTED ADDRESS')
 
-            elif self.client_address == nextAddress and ack_number != expected_packet_ack:
+            elif self.client_address == expectedClient and ack_number != expected_packet_ack:
                 print('UNEXPECTED ACK RECEIVED')
                 # send_window(socketo, self.client_address)
             else:
@@ -433,12 +453,14 @@ def writeToFile(filename, file_length):
     global expected_packet
     expected_packet = 0
     file_chunks = []
+    global receivedFull
+    receivedFull = False
 
 """
 initialize packet window
 """
 def init_window(server, peer_address, ring, filename, file_length):
-    global pack_sequence, nextAddress, routes, rtt_matrix, window, expected_packet_ack, timeoutOnPacket
+    global pack_sequence, nextAddress, routes, rtt_matrix, window, expected_packet_ack
 
     idx = 0
     pack_sequence = 0
@@ -466,7 +488,6 @@ def init_window(server, peer_address, ring, filename, file_length):
             })
         window.append(new_pckt)
 
-        timeoutOnPacket[pack_sequence] = 0
         pack_sequence += 1
         idx += 1
 
@@ -996,7 +1017,7 @@ def main():
                     nextR = findNextInRing(ring) 
                     print("next ringo is " + str(nextR))
                     init_window(server.socket, nextAddress, ring, file_name, file_length)
-                    global timeoutOnPacket
+                    
 
         else:
             print('Bad Command\n')
