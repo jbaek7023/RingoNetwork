@@ -60,6 +60,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
         global expected_packet
         global expected_packet_ack
+        global nextAddress, routes, rtt_matrix
 
         if keyword == "peer_discovery":
             peers[str(self.client_address)] = 1  # Add to the Peer List
@@ -198,7 +199,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                         except:
                             pass
 
-                        init_window(socketo, nextAddress, filename, file_length)
+                        init_window(socketo, filename, file_length)
             print('sending ack ' + str(incoming_seq_number) + "; still want all " + str(file_length))
             try:
                 socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
@@ -253,7 +254,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                         nextAddress = (nextName, nextPort)
                     except:
                         pass
-                    send_packet(socketo, nextAddress, file_length, new_pckt)
+                    send_packet(socketo, file_length, new_pckt)
 
             # Signal to user that it is safe to input again
             if (ack_number == file_length-1 and expected_packet_ack == file_length): # last packet confirmed sent
@@ -290,13 +291,31 @@ timeoutSet = False
 Timeout function; loops while we still expect more acks, then resets the globals
     to receive a future file
 '''
-def timeout(server, client_address, file_length, timeout):
-    global nextAddress
+def timeout(server, file_length, timeout):
+    global nextAddress, routes, rtt_matrix
     print('TIMEOUT BEGINS HERE')
     while(True):
+        routes = []
+        findRing(local, rtt_matrix, [], 0)
+        routes.sort()
+        try:
+            nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+            nextPort = int(routes[0][1][1].split(",")[1][:5])
+            nextAddress = (nextName, nextPort)
+        except:
+            pass
         global expected_packet_ack
         if (expected_packet_ack >= file_length):    # implies we've received ack for last packet
             # reset global variables
+            routes = []
+            findRing(local, rtt_matrix, [], 0)
+            routes.sort()
+            try:
+                nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                nextPort = int(routes[0][1][1].split(",")[1][:5])
+                nextAddress = (nextName, nextPort)
+            except:
+                pass
             print('breaking timer')
             global timeoutSet
 
@@ -310,19 +329,30 @@ def timeout(server, client_address, file_length, timeout):
 
             break;
 
-
         time.sleep(.01)
         now = time.time()
         # print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
         if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + timeout):
             print(expected_packet_ack)
+            routes = []
+            findRing(local, rtt_matrix, [], 0)
+            routes.sort()
             try:
                 nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
                 nextPort = int(routes[0][1][1].split(",")[1][:5])
                 nextAddress = (nextName, nextPort)
             except:
                 pass
-            send_window(server, nextAddress, file_length)
+            send_window(server, file_length)
+        routes = []
+        findRing(local, rtt_matrix, [], 0)
+        routes.sort()
+        try:
+            nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+            nextPort = int(routes[0][1][1].split(",")[1][:5])
+            nextAddress = (nextName, nextPort)
+        except:
+            pass
 
 '''
 Used by Receiving Ringo to write the transferred file
@@ -341,11 +371,21 @@ def writeToFile(filename, file_length):
 """
 initialize packet window
 """
-def init_window(server, peer_address, filename, file_length):
-    global pack_sequence
+def init_window(server, filename, file_length):
+    global pack_sequence, nextAddress, routes, rtt_matrix
 
     idx = 0
     while idx < len(file_chunks) and idx < PACKETS_WINDOW_SIZE:   # stops if file_chunks is smaller than a window
+        routes = []
+        findRing(local, rtt_matrix, [], 0)
+        routes.sort()
+        try:
+            nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+            nextPort = int(routes[0][1][1].split(",")[1][:5])
+
+            nextAddress = (nextName, nextPort)
+        except:
+            pass
         print(pack_sequence)
         new_pckt = json.dumps({
             'command': 'file',
@@ -359,24 +399,38 @@ def init_window(server, peer_address, filename, file_length):
         pack_sequence += 1
         idx += 1
 
-    send_window(server, peer_address, file_length)
+    send_window(server, file_length)
 
 
 '''
 send window of packets
 '''
-def send_window(sock_server, client_address, file_length):
+def send_window(sock_server, file_length):
+    global nextAddress, routes, rtt_matrix
     for packet in window:
-        send_packet(sock_server, client_address, file_length, packet)
+        routes = []
+        findRing(local, rtt_matrix, [], 0)
+        routes.sort()
+        try:
+            nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+            nextPort = int(routes[0][1][1].split(",")[1][:5])
+
+            nextAddress = (nextName, nextPort)
+        except:
+            pass
+        send_packet(sock_server, file_length, packet)
 
 '''
 Send packet data
 '''
-def send_packet(socket, client_address, file_length, packet):
+def send_packet(socket, file_length, packet):
+    global nextAddress, routes, rtt_matrix
     json_pckt = json.loads(packet) # stringify for printing
     sequence = json_pckt['seq_number']
     print("sending packet\t" + str(json_pckt['seq_number']))
-    global nextAddress
+    routes = []
+    findRing(local, rtt_matrix, [], 0)
+    routes.sort()
     try:
         nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
         nextPort = int(routes[0][1][1].split(",")[1][:5])
@@ -401,7 +455,7 @@ def send_packet(socket, client_address, file_length, packet):
     if (json_pckt['seq_number'] == 0 and not timeoutSet):
         print("BEGINNING THREAD")
         timeoutSet = True
-        Thread(target=timeout,args=(socket, client_address, file_length, 1.5,)).start()
+        Thread(target=timeout,args=(socket, file_length, 1.5,)).start()
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
     # We're sending RTT when it's the first one.
@@ -457,7 +511,7 @@ def churn_tout(server, created, item, seq_id, local):
 
     # Timeout for each peer route A to B
     while True:
-        global non_active, rtt_matrix, num_active_node
+        global non_active, rtt_matrix, num_active_node, nextAddress, routes
         # It's not in the sequence lists! (We got the packet back)
         if not seq_id in seq_ids:
             active_ringos[item] = 1
@@ -471,7 +525,9 @@ def churn_tout(server, created, item, seq_id, local):
                 start_peer_discovey()
                 start_finding_own_rtt()
                 start_finding_rtt_vectors()
+                routes = []
                 findRing(local, rtt_matrix, [], 0)
+                routes.sort()
                 try:
                     nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
                     nextPort = int(routes[0][1][1].split(",")[1][:5])
@@ -496,14 +552,16 @@ def churn_tout(server, created, item, seq_id, local):
                 non_active = True
                 if int(num_active_node) > len(active_ringos):
                     num_active_node = len(active_ringos)
+                    routes = []
                     findRing(local, rtt_matrix, [], 0)
+                    routes.sort()
                     try:
                         nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
                         nextPort = int(routes[0][1][1].split(",")[1][:5])
 
                         nextAddress = (nextName, nextPort)
                     except:
-                        pass
+                        print("Please wait.")
                 # Find Optimal Ring
 
                 # print('found inactive node')
@@ -512,6 +570,7 @@ def churn_tout(server, created, item, seq_id, local):
 
 def churn(server, item, seq_id, local):
     while True:
+        global nextAddress, route, rtt_matrix
         # Keep Alive works until the program termiantes
         kl_name =  ast.literal_eval(item)[0]
         kl_port =  ast.literal_eval(item)[1]
@@ -529,6 +588,15 @@ def churn(server, item, seq_id, local):
             'created': created,
             'ttl': 2, # goes through one time
             })
+        routes = []
+        findRing(local, rtt_matrix, [], 0)
+        routes.sort()
+        try:
+            nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+            nextPort = int(routes[0][1][1].split(",")[1][:5])
+            nextAddress = (nextName, nextPort)
+        except:
+            pass
         try:
             server.socket.sendto(
                 kl_data.encode('utf-8'),
@@ -624,7 +692,7 @@ def findRing(node, cities, path, distance):
 def main():
     if (len(sys.argv) != 6):
         usage()
-    global offline, kl_threads_list, rtt_matrix, flag, poc_name, local, poc_port, num_of_ringos, current_num_of_ringos, seq_id, active_ringos, num_active_node, HOST, PORT, server, routes
+    global offline, kl_threads_list, rtt_matrix, flag, poc_name, local, poc_port, num_of_ringos, current_num_of_ringos, seq_id, active_ringos, num_active_node, HOST, PORT, server, routes, nextAddress
     flag = sys.argv[1]  # Getting a flag i.e) S, F, R
     local_port = sys.argv[2]  # Getting a local port i.e) 23222
     poc_name = sys.argv[3]  # Getting the port name i.e) networklab3.cc.gatech.edu
@@ -673,8 +741,16 @@ def main():
 
     # Find Ring
     local = str((HOST,PORT))
+    routes = []
     findRing(local, rtt_matrix, [], 0)
     routes.sort()
+    try:
+        nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+        nextPort = int(routes[0][1][1].split(",")[1][:5])
+
+        nextAddress = (nextName, nextPort)
+    except:
+        pass
 
     keep_alive(server, seq_id, local)
 
@@ -696,7 +772,7 @@ def main():
         try:
             nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
             nextPort = int(routes[0][1][1].split(",")[1][:5])
-            global nextAddress
+
             nextAddress = (nextName, nextPort)
         except:
             pass
@@ -772,6 +848,15 @@ def main():
 
                     idx = 0
                     while (idx + SEND_BUF) < len(data):
+                        routes = []
+                        findRing(local, rtt_matrix, [], 0)
+                        routes.sort()
+                        try:
+                            nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                            nextPort = int(routes[0][1][1].split(",")[1][:5])
+                            nextAddress = (nextName, nextPort)
+                        except:
+                            pass
                         file.append(data[idx:idx+SEND_BUF])
                         idx += SEND_BUF
                     file.append(data[idx:])
@@ -787,6 +872,9 @@ def main():
                     file_length = len(file_chunks)
                     expected_packet_ack = 0
                     pack_sequence = 0
+                    routes = []
+                    findRing(local, rtt_matrix, [], 0)
+                    routes.sort()
                     try:
                         nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
                         nextPort = int(routes[0][1][1].split(",")[1][:5])
@@ -794,7 +882,7 @@ def main():
                         nextAddress = (nextName, nextPort)
                     except:
                         pass
-                    init_window(server.socket, nextAddress, file_name, file_length)
+                    init_window(server.socket, file_name, file_length)
         else:
             print('Bad Command\n')
     if offline:
