@@ -136,6 +136,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     socketo.sendto(new_rtt_peer_data.encode('utf-8'), self.client_address)
                 except:
                     pass
+
         elif keyword == "file":
             print("received message data from " + str(self.client_address))
 
@@ -168,7 +169,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                 expected_packet += 1
 
                 # Signal to user that it is safe to input again
-                if (incoming_seq_number == file_length-1 and expected_packet == file_length):   # confirmed received in full 
+                if (incoming_seq_number == file_length-1 and expected_packet == file_length):   # confirmed received in full
                     print("File fully received!")
                     print(">")
                     # print("flag: " + flag)
@@ -186,9 +187,16 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     if flag == 'F' and forwarded == False:
                         print("I'm forwarding this file!")
                         expected_packet = 0
-                        global nextAddress
-                        init_window(socketo, nextAddress, filename, file_length)
 
+                        try:
+                            nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                            nextPort = int(routes[0][1][1].split(",")[1][:5])
+
+                            nextAddress = (nextName, nextPort)
+                        except:
+                            pass
+
+                        init_window(socketo, filename, file_length)
             print('sending ack ' + str(incoming_seq_number) + "; still want all " + str(file_length))
             try:
                 socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
@@ -237,8 +245,13 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     print(str(len(window)))
 
                     pack_sequence += 1
-
-                    send_packet(socketo, self.client_address, file_length, new_pckt)
+                    try:
+                        nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
+                        nextPort = int(routes[0][1][1].split(",")[1][:5])
+                        nextAddress = (nextName, nextPort)
+                    except:
+                        pass
+                    send_packet(socketo, file_length, new_pckt)
 
             # Signal to user that it is safe to input again
             if (ack_number == file_length-1 and expected_packet_ack == file_length): # last packet confirmed sent
@@ -295,11 +308,11 @@ def timeout(server, client_address, file_length, timeout):
 
             break;
 
-        time.sleep(.01)
+        time.sleep(1)
         now = time.time()
         # print("here, expected ack is " + str(expected_packet_ack) + " and file_length is " + str(file_length))
-        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + .1 *timeout):
-            print(expected_packet_ack)
+        if (expected_packet_ack < file_length and now >= sendTimes[expected_packet_ack] + timeout):
+            
             send_window(server, nextAddress, file_length)
 
 '''
@@ -356,6 +369,7 @@ def send_packet(socket, client_address, file_length, packet):
     print("sending packet\t" + str(json_pckt['seq_number']))
     print("sending to " + str(client_address))
 
+    print(routes)
     try:
         socket.sendto(
             packet.encode('utf-8'),
@@ -371,9 +385,8 @@ def send_packet(socket, client_address, file_length, packet):
 
     global timeoutSet
     if (json_pckt['seq_number'] == 0 and not timeoutSet):
-        print("BEGINNING THREAD")
         timeoutSet = True
-        Thread(target=timeout,args=(socket, client_address, file_length, 1.5,)).start()
+        Thread(target=timeout,args=(socket, client_address, file_length, 20,)).start()
 
 def send_rtt_vector(server, peers, poc_name, poc_port):
     # We're sending RTT when it's the first one.
@@ -600,8 +613,7 @@ def main():
 
     offline = False
 
-    # global non_active
-    # non_active = False
+    
     num_active_node = int(num_of_ringos)
     # Peer Discover Here. #
 
@@ -719,7 +731,7 @@ def main():
                     print('Illegal Request!')
                     print('Only Senders may make send requests')
                 else:
-                    print("FILENAME:\t" + text.split()[1])
+                    
                     file_name = text.split()[1]
                     f = open(file_name, "rb")
                     data = f.read()
