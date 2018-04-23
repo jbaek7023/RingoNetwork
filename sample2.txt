@@ -14,3 +14,10 @@ $ diff catty.jpg catty(2).jpg
 # test integrity of sent files
 $ sha1sum catty.jpg
 $ sha1sum catty(2).jpg
+
+
+python3 ringo.py S 5002 0 0 5
+python3 ringo.py F 5003 networklab2.cc.gatech.edu 5002 5
+python3 ringo.py F 5004 networklab3.cc.gatech.edu 5003 5
+python3 ringo.py F 5005 networklab4.cc.gatech.edu 5004 5
+python3 ringo.py R 5006 networklab5.cc.gatech.edu 5005 5

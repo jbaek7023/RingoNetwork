@@ -163,7 +163,12 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     })
 
             if incoming_seq_number != expected_packet:
-                print('Unexpected packet: ' + str(incoming_seq_number))
+                try:
+                    for i in range(3):
+                        print('sending ack for ' + str(incoming_seq_number) + 'anyway')
+                        socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
+                except:
+                    pass
 
 
             if incoming_seq_number == expected_packet:  # if not expeceted, let the sender timeout
@@ -187,7 +192,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     Forward file
                     '''
                     global forwarded
-                    if flag == 'F' and forwarded == False:
+                    if flag == 'F':
                         print("I'm forwarding this file!")
                         expected_packet = 0
 
@@ -200,11 +205,11 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                             pass
 
                         init_window(socketo, filename, file_length)
-            print('sending ack ' + str(incoming_seq_number) + "; still want all " + str(file_length))
-            try:
-                socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
-            except:
-                pass
+                print('sending ack ' + str(incoming_seq_number) + "; still want all " + str(file_length))
+                try:
+                    socketo.sendto(pckt_ack.encode('utf-8'), self.client_address)
+                except:
+                    pass
         elif keyword == "file_ack": # this is an ack for the piece of the file we sent
             # data = json_obj['data']
             ack_number = json_obj['ack_number']
