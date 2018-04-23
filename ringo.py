@@ -222,11 +222,12 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
                     if flag == 'R':
                         writeToFile(filename, file_length)
 
-                    '''
-                    Forward file
-                    '''
-                    global forwarded
-                    if flag == 'F':# and forwarded == False:
+                        '''
+                        Forward file
+                        '''
+                        # global forwarded
+                        # if flag == 'F':# and forwarded == False:
+                    else:
                         print("I'm forwarding this file!")
                         expected_packet = 0
 
@@ -266,7 +267,7 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
             expectedClient = findNextInRing(ring)
 
             if self.client_address == hostAddress:
-                print("FECEIVED ACK FROM HOST")
+                print("RECEIVED ACK FROM HOST")
 
             
             # elif self.client_address != nextAddress:  # if next address changed, let it timeout
@@ -402,10 +403,7 @@ def timeout(server, ring, filename, file_length, timeout):
 
             newNext = ()
             try:
-                # nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
-                # nextPort = int(routes[0][1][1].split(",")[1][:5])
-                # newNext = (nextName, nextPort) 
-                newNext = findNextInRing(routes[0][1][:-1])
+                newNext = nextAddress
                 peer_address = findNextInRing(ring)
             except:
                 pass
@@ -421,24 +419,9 @@ def timeout(server, ring, filename, file_length, timeout):
 
                 break;
 
-            # if newNext != nextAddress:
-            #     print("old address:\t" + str(nextAddress) + ";  new address:\t"+ str(newNext))
-            #     timeoutSet = False;
-            #     nextAddress = newNext
-            #     init_window(server, nextAddress, ring, filename,file_length)
-
-            #     break;
             else:
                 send_window(server, nextAddress, file_length)
-        # routes = []
-        # findRing(local, rtt_matrix, [], 0)
-        # routes.sort()
-        # try:
-        #     nextName = routes[0][1][1].split(",")[0][2:-1]  # trim of parenths
-        #     nextPort = int(routes[0][1][1].split(",")[1][:5])
-        #     nextAddress = (nextName, nextPort)
-        # except:
-        #     pass
+
 
 '''
 Used by Receiving Ringo to write the transferred file
@@ -453,8 +436,6 @@ def writeToFile(filename, file_length):
     global expected_packet
     expected_packet = 0
     file_chunks = []
-    global receivedFull
-    receivedFull = False
 
 """
 initialize packet window
@@ -538,6 +519,7 @@ def send_packet(socket, peer_address, file_length, packet):
     # print("sending to\t" + str(peer_address))
 
     try:
+        time.sleep(.1)
         socket.sendto(
             packet.encode('utf-8'),
             peer_address
