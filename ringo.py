@@ -275,35 +275,35 @@ class MyUDPHandler(socketserver.BaseRequestHandler):
 
                 expected_packet_ack += 1
 
-                p = json.loads(window[len(window)-1])
-                if (ack_number == p['seq_number']):
+                # p = json.loads(window[len(window)-1])
+                # if (ack_number == p['seq_number']):
+
+                print("deleting from window...")
+
+                del window[0]
+                # print(str(len(window)))
+
+                print("FILE SEQUENCE NUMBER:\t" + str(pack_sequence))
+                # print("length of file_chunks:\t" + str(len(file_chunks)))
+
+                if pack_sequence < file_length: #len(file_chunks):
+
+                    new_pckt = json.dumps({
+                            'command': 'file',
+                            'ring' : ring,
+                            'filename': filename,
+                            'file_length':file_length,
+                            'seq_number': pack_sequence,
+                            'data': file_chunks[pack_sequence].decode('ISO-8859-1')
+                            })
+                    print('adding to window...')
+
+                    window.append(new_pckt)
+
+                    pack_sequence += 1
                     
-                    print("deleting from window...")
 
-                    del window[0]
-                    # print(str(len(window)))
-
-                    print("FILE SEQUENCE NUMBER:\t" + str(pack_sequence))
-                    # print("length of file_chunks:\t" + str(len(file_chunks)))
-
-                    if pack_sequence < file_length: #len(file_chunks):
-
-                        new_pckt = json.dumps({
-                                'command': 'file',
-                                'ring' : ring,
-                                'filename': filename,
-                                'file_length':file_length,
-                                'seq_number': pack_sequence,
-                                'data': file_chunks[pack_sequence].decode('ISO-8859-1')
-                                })
-                        print('adding to window...')
-
-                        window.append(new_pckt)
-
-                        pack_sequence += 1
-                        
-
-                        send_packet(socketo, self.client_address, file_length, new_pckt)
+                    send_packet(socketo, self.client_address, file_length, new_pckt)
 
             # Signal to user that it is safe to input again
             if (ack_number == file_length-1 and expected_packet_ack == file_length): # last packet confirmed sent
@@ -452,8 +452,8 @@ def init_window(server, peer_address, ring, filename, file_length):
 send window of packets
 '''
 def send_window(sock_server, peer_address, file_length):
-    global nextAddress, routes, rtt_matrix
-    for packet in window:
+    wdw = list(window)
+    for packet in wdw:
         
         send_packet(sock_server, peer_address, file_length, packet)
 
