@@ -3,7 +3,7 @@
 The ringo network is a network of nodes (ringos) that perform packet sending on a peer-to-peer platform. 
 
 - Authors: John (JaeMin) Baek & Thomas Jeremiah Bright
-- Emails:	tbright32@gatech.edu	jbaek60@gatech.edu
+- Emails: jbaek60@gatech.edu tbright32@gatech.edu	
 - [**REPORT2.pdf	updated report describing our ringo network architecture**](REPORT2.pdf)
 - Files:	
 ```
