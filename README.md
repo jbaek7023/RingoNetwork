@@ -1,12 +1,16 @@
 # RINGO NETWORK
-Authors: John (JaeMin) Baek & Thomas Jeremiah Bright
-Emails:	tbright32@gatech.edu	jbaek60@gatech.edu
-Files:	ringo.py 	monolithic code base for ringo network node
-	sample.txt  	examples of running the ringo network
-	[**REPORT2.pdf	updated report describing our ringo network architecture**](REPORT2.pdf)
-	README.md  	this
 
 The ringo network is a network of nodes (ringos) that perform packet sending on a peer-to-peer platform. 
+
+- Authors: John (JaeMin) Baek & Thomas Jeremiah Bright
+- Emails:	tbright32@gatech.edu	jbaek60@gatech.edu
+- [**REPORT2.pdf	updated report describing our ringo network architecture**](REPORT2.pdf)
+- Files:	
+```
+	ringo.py 	monolithic code base for ringo network node
+	sample.txt  	examples of running the ringo network
+	README.md  	this
+```
 
 ![gbn](screenshot.png)
 
